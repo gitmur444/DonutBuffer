@@ -1,0 +1,22 @@
+# Build directory
+build/
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Compiled Object files
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Executables
+*.exe
+*.out
+*.app
