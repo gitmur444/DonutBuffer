@@ -20,6 +20,11 @@ public:
     void request_stop();
     void join_threads(); // Waits for threads to complete
     void reset_buffer();   // Clears the ring buffer
+    
+    // Dynamic configuration methods
+    void update_producers(int new_producer_count);
+    void update_consumers(int new_consumer_count);
+    void update_buffer_size(int new_buffer_size);
 
     bool is_active() const;
     size_t get_buffer_item_count() const;

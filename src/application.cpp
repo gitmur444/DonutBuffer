@@ -60,6 +60,17 @@ bool Application::initialize(int width, int height, const char* title) {
     gui_events::on_stop_simulation_request = [this]() {
         this->handle_stop_simulation_request();
     };
+    
+    // Setup dynamic parameter update callbacks
+    gui_events::on_producer_count_update = [this](int count) {
+        this->handle_producer_count_update(count);
+    };
+    gui_events::on_consumer_count_update = [this](int count) {
+        this->handle_consumer_count_update(count);
+    };
+    gui_events::on_buffer_size_update = [this](int size) {
+        this->handle_buffer_size_update(size);
+    };
 
     initialized = true;
     add_log("Application initialized successfully.");
@@ -214,4 +225,56 @@ void Application::handle_stop_simulation_request() {
     add_log("Application: Joining threads to ensure clean stop...");
     simulationManager->join_threads();
     add_log("Application: All threads joined, simulation stopped.");
+}
+
+// Обработчики для динамического изменения параметров
+void Application::handle_producer_count_update(int new_count) {
+    if (!simulationManager) {
+        add_log("ERROR: Cannot update producer count: SimulationManager is null.");
+        return;
+    }
+    
+    add_log("Application: Dynamically updating producer count to " + std::to_string(new_count));
+    simulationManager->update_producers(new_count);
+    
+    // Добавить новые данные для графика производительности сразу после изменения
+    if (simulationManager->is_active()) {
+        double producer_speed = simulationManager->get_producer_speed();
+        double consumer_speed = simulationManager->get_consumer_speed();
+        g_performance_history.add_data_point(producer_speed, consumer_speed);
+    }
+}
+
+void Application::handle_consumer_count_update(int new_count) {
+    if (!simulationManager) {
+        add_log("ERROR: Cannot update consumer count: SimulationManager is null.");
+        return;
+    }
+    
+    add_log("Application: Dynamically updating consumer count to " + std::to_string(new_count));
+    simulationManager->update_consumers(new_count);
+    
+    // Добавить новые данные для графика производительности сразу после изменения
+    if (simulationManager->is_active()) {
+        double producer_speed = simulationManager->get_producer_speed();
+        double consumer_speed = simulationManager->get_consumer_speed();
+        g_performance_history.add_data_point(producer_speed, consumer_speed);
+    }
+}
+
+void Application::handle_buffer_size_update(int new_size) {
+    if (!simulationManager) {
+        add_log("ERROR: Cannot update buffer size: SimulationManager is null.");
+        return;
+    }
+    
+    add_log("Application: Updating buffer size to " + std::to_string(new_size));
+    simulationManager->update_buffer_size(new_size);
+    
+    // Добавить новые данные для графика производительности при необходимости
+    if (simulationManager->is_active()) {
+        double producer_speed = simulationManager->get_producer_speed();
+        double consumer_speed = simulationManager->get_consumer_speed();
+        g_performance_history.add_data_point(producer_speed, consumer_speed);
+    }
 }

@@ -60,6 +60,11 @@ namespace gui_events {
     // Callbacks for GUI to signal actions to the application logic
     extern std::function<void(int /*producers*/, int /*consumers*/, int /*buffer_size*/)> on_start_simulation_request;
     extern std::function<void()> on_stop_simulation_request;
+    
+    // Callbacks for dynamic parameter updates
+    extern std::function<void(int /*new_count*/)> on_producer_count_update;
+    extern std::function<void(int /*new_count*/)> on_consumer_count_update;
+    extern std::function<void(int /*new_size*/)> on_buffer_size_update;
 }
 
 // Functions for external logic (Application) to update GUI state

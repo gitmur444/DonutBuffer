@@ -29,6 +29,102 @@ SimulationManager::~SimulationManager() {
     log("SimulationManager destroyed.");
 }
 
+void SimulationManager::update_producers(int new_producer_count) {
+    // Проверка допустимости значения
+    if (new_producer_count <= 0) {
+        log("Cannot set producers to zero or negative value");
+        return;
+    }
+    
+    if (!simulation_active.load()) {
+        // Если симуляция не запущена, просто обновляем конфигурацию
+        num_producers_cfg = new_producer_count;
+        log("Producer count updated to " + std::to_string(new_producer_count) + " (will take effect on next start)");
+        return;
+    }
+    
+    // Если текущее количество больше нового - останавливаем лишние потоки
+    if (new_producer_count < num_producers_cfg) {
+        log("Reducing producer count from " + std::to_string(num_producers_cfg) + 
+            " to " + std::to_string(new_producer_count));
+        
+        // Пока оставляем потоки работать, просто обновляем конфигурацию
+        // В реальной системе здесь можно было бы реализовать механизм безопасной остановки потоков
+        num_producers_cfg = new_producer_count;
+    } 
+    // Если нужно добавить продюсеров
+    else if (new_producer_count > num_producers_cfg) {
+        log("Increasing producer count from " + std::to_string(num_producers_cfg) + 
+            " to " + std::to_string(new_producer_count));
+        
+        // Запускаем дополнительные потоки продюсеров
+        int current_count = num_producers_cfg;
+        num_producers_cfg = new_producer_count;
+        
+        for (int i = current_count; i < new_producer_count; ++i) {
+            producer_threads.emplace_back(&SimulationManager::producer_task_impl, this, i + 1);
+        }
+    }
+}
+
+void SimulationManager::update_consumers(int new_consumer_count) {
+    // Проверка допустимости значения
+    if (new_consumer_count <= 0) {
+        log("Cannot set consumers to zero or negative value");
+        return;
+    }
+    
+    if (!simulation_active.load()) {
+        // Если симуляция не запущена, просто обновляем конфигурацию
+        num_consumers_cfg = new_consumer_count;
+        log("Consumer count updated to " + std::to_string(new_consumer_count) + " (will take effect on next start)");
+        return;
+    }
+    
+    // Если текущее количество больше нового - останавливаем лишние потоки
+    if (new_consumer_count < num_consumers_cfg) {
+        log("Reducing consumer count from " + std::to_string(num_consumers_cfg) + 
+            " to " + std::to_string(new_consumer_count));
+        
+        // Пока оставляем потоки работать, просто обновляем конфигурацию
+        // В реальной системе здесь можно было бы реализовать механизм безопасной остановки потоков
+        num_consumers_cfg = new_consumer_count;
+    } 
+    // Если нужно добавить консьюмеров
+    else if (new_consumer_count > num_consumers_cfg) {
+        log("Increasing consumer count from " + std::to_string(num_consumers_cfg) + 
+            " to " + std::to_string(new_consumer_count));
+        
+        // Запускаем дополнительные потоки консьюмеров
+        int current_count = num_consumers_cfg;
+        num_consumers_cfg = new_consumer_count;
+        
+        for (int i = current_count; i < new_consumer_count; ++i) {
+            consumer_threads.emplace_back(&SimulationManager::consumer_task_impl, this, i + 1);
+        }
+    }
+}
+
+void SimulationManager::update_buffer_size(int new_buffer_size) {
+    // Проверка допустимости значения
+    if (new_buffer_size <= 0) {
+        log("Cannot set buffer size to zero or negative value");
+        return;
+    }
+    
+    if (!simulation_active.load()) {
+        // Если симуляция не запущена, просто обновляем конфигурацию
+        buffer_size_cfg = new_buffer_size;
+        log("Buffer size updated to " + std::to_string(new_buffer_size) + " (will take effect on next start)");
+        return;
+    }
+    
+    // Если симуляция запущена, сообщаем что размер буфера изменится при следующем запуске
+    buffer_size_cfg = new_buffer_size;
+    log("Buffer size will be updated to " + std::to_string(new_buffer_size) + 
+        " on next simulation restart (cannot resize active buffer)");
+}
+
 void SimulationManager::log(const std::string& message) {
     if (logger_func) {
         logger_func(message);

@@ -34,6 +34,11 @@ private:
     // Private helpers to handle GUI requests
     void handle_start_simulation_request(int producers, int consumers, int buffer_size);
     void handle_stop_simulation_request();
+    
+    // Обработчики для динамического изменения параметров
+    void handle_producer_count_update(int new_count);
+    void handle_consumer_count_update(int new_count);
+    void handle_buffer_size_update(int new_size);
 };
 
 #endif // APPLICATION_H

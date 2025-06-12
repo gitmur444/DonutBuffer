@@ -35,6 +35,11 @@ const size_t MAX_LOG_ENTRIES = 100;
 namespace gui_events {
     std::function<void(int, int, int)> on_start_simulation_request;
     std::function<void()> on_stop_simulation_request;
+    
+    // New callbacks for dynamic parameter updates
+    std::function<void(int)> on_producer_count_update;
+    std::function<void(int)> on_consumer_count_update;
+    std::function<void(int)> on_buffer_size_update;
 }
 
 // Internal GUI state, updated by Application via setter functions
@@ -138,7 +143,6 @@ void set_gui_speed_stats(double producer_speed, double consumer_speed, size_t to
 }
 
 // --- Logging ---
-// Definition of add_log remains, it's used by GUI and passed to SimulationManager
 void add_log(const std::string& message) {
     std::lock_guard<std::mutex> lock(log_mutex);
     auto now = std::chrono::system_clock::now();
@@ -156,9 +160,20 @@ void add_log(const std::string& message) {
     std::stringstream ss;
     ss << time_buf << "." << std::setfill('0') << std::setw(3) << ms.count() << ": " << message;
     
-    event_log.push_back(ss.str());
-    if (event_log.size() > MAX_LOG_ENTRIES) {
-        event_log.pop_front();
+    // Вывод в консоль для всех сообщений
+    std::cout << ss.str() << std::endl;
+    
+    // В GUI отображаем только команды пользователя
+    bool is_user_command = message.find("User requested") != std::string::npos || 
+                           message.find("Start simulation requested") != std::string::npos ||
+                           message.find("Stop simulation requested") != std::string::npos ||
+                           message.find("Dynamically updating") != std::string::npos;
+    
+    if (is_user_command) {
+        event_log.push_back(ss.str());
+        if (event_log.size() > MAX_LOG_ENTRIES) {
+            event_log.pop_front();
+        }
     }
 }
 
@@ -224,17 +239,32 @@ void render_gui_frame() {
     ImGui::Begin("RingBufferGUI", nullptr, window_flags);
     ImGui::PopStyleVar(2);
     
-    // Отображаем информацию о производительности
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-    
-    ImGui::Separator();
     ImGui::Text("Configuration:");
     
-    ImGui::BeginDisabled(current_gui_simulation_is_active);
-    ImGui::SliderInt("Producers", &num_producers_gui, 1, MAX_PRODUCERS, "%d");
-    ImGui::SliderInt("Consumers", &num_consumers_gui, 1, MAX_CONSUMERS, "%d");
-    ImGui::SliderInt("Buffer Size", &buffer_size_gui, 1, MAX_BUFFER_SIZE, "%d");
-    ImGui::EndDisabled();
+    // Allow parameter changes during simulation
+    int temp_producers = num_producers_gui;
+    if (ImGui::SliderInt("Producers", &temp_producers, 1, MAX_PRODUCERS, "%d")) {
+        num_producers_gui = temp_producers;
+        if (current_gui_simulation_is_active && gui_events::on_producer_count_update) {
+            gui_events::on_producer_count_update(num_producers_gui);
+        }
+    }
+    
+    int temp_consumers = num_consumers_gui;
+    if (ImGui::SliderInt("Consumers", &temp_consumers, 1, MAX_CONSUMERS, "%d")) {
+        num_consumers_gui = temp_consumers;
+        if (current_gui_simulation_is_active && gui_events::on_consumer_count_update) {
+            gui_events::on_consumer_count_update(num_consumers_gui);
+        }
+    }
+    
+    int temp_buffer_size = buffer_size_gui;
+    if (ImGui::SliderInt("Buffer Size", &temp_buffer_size, 1, MAX_BUFFER_SIZE, "%d")) {
+        buffer_size_gui = temp_buffer_size;
+        if (current_gui_simulation_is_active && gui_events::on_buffer_size_update) {
+            gui_events::on_buffer_size_update(buffer_size_gui);
+        }
+    }
 
     if (current_gui_simulation_is_active) {
         if (ImGui::Button("Stop Simulation")) {
@@ -364,11 +394,62 @@ void render_gui_frame() {
                 }
             }
             
-            // Axis labels
+            // Константа размера элемента данных (int = 4 байта)
+            const int BYTES_PER_ITEM = 4;
+            
+            // Вычисляем и форматируем данные в байтах/КБ/МБ/ГБ
             char label[64];
-            snprintf(label, sizeof(label), "Max: %.2f items/sec", max_display_speed);
+            double max_bytes = max_display_speed * BYTES_PER_ITEM;
+            
+            if (max_bytes < 1024) {
+                snprintf(label, sizeof(label), "Max: %.2f items/sec (%.2f bytes/sec)", max_display_speed, max_bytes);
+            } else if (max_bytes < 1024*1024) {
+                snprintf(label, sizeof(label), "Max: %.2f items/sec (%.2f KB/sec)", max_display_speed, max_bytes/1024);
+            } else if (max_bytes < 1024*1024*1024) {
+                snprintf(label, sizeof(label), "Max: %.2f items/sec (%.2f MB/sec)", max_display_speed, max_bytes/(1024*1024));
+            } else {
+                snprintf(label, sizeof(label), "Max: %.2f items/sec (%.2f GB/sec)", max_display_speed, max_bytes/(1024*1024*1024));
+            }
+            
             draw_list->AddText(ImVec2(canvas_pos.x + 5, canvas_pos.y + 5), 
-                              ImGui::GetColorU32(ImGuiCol_Text), label);
+                             ImGui::GetColorU32(ImGuiCol_Text), label);
+            
+            // Добавляем вертикальную шкалу с делениями
+            const float y_scale = canvas_size.y / max_display_speed;
+            const int num_ticks = 5; // Количество делений на шкале
+            
+            for (int i = 0; i < num_ticks; i++) {
+                float y_value = max_display_speed * (i / float(num_ticks - 1));
+                float y_pos = canvas_pos.y + canvas_size.y - y_value * y_scale;
+                
+                // Горизонтальная линия для метки
+                draw_list->AddLine(
+                    ImVec2(canvas_pos.x, y_pos),
+                    ImVec2(canvas_pos.x + 5, y_pos),
+                    ImGui::GetColorU32(ImGuiCol_Text),
+                    1.0f
+                );
+                
+                // Форматирование подписи с учетом единиц измерения
+                char y_label[32];
+                double bytes = y_value * BYTES_PER_ITEM;
+                
+                if (bytes < 1024) {
+                    snprintf(y_label, sizeof(y_label), "%.1f B", bytes);
+                } else if (bytes < 1024*1024) {
+                    snprintf(y_label, sizeof(y_label), "%.1f KB", bytes/1024);
+                } else if (bytes < 1024*1024*1024) {
+                    snprintf(y_label, sizeof(y_label), "%.1f MB", bytes/(1024*1024));
+                } else {
+                    snprintf(y_label, sizeof(y_label), "%.1f GB", bytes/(1024*1024*1024));
+                }
+                
+                draw_list->AddText(
+                    ImVec2(canvas_pos.x + 7, y_pos - 7),
+                    ImGui::GetColorU32(ImGuiCol_Text),
+                    y_label
+                );                
+            }
                               
             // Legend
             float legend_y = canvas_pos.y + canvas_size.y - 20;
