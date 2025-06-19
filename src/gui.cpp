@@ -33,6 +33,7 @@ const size_t MAX_LOG_ENTRIES = 100;
 // GUI specific state (used to configure SimulationManager via callbacks)
 // Callbacks for GUI actions
 namespace gui_events {
+    std::function<void(int)> on_buffer_impl_changed = [](int){};
     std::function<void(int, int, int)> on_start_simulation_request;
     std::function<void()> on_stop_simulation_request;
     
@@ -221,6 +222,11 @@ void init_gui_components(GLFWwindow* window, const char* glsl_version) {
 }
 
 void render_gui_frame() {
+    // Очистка экрана перед началом рендеринга нового кадра
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Тёмно-серый фон
+    glClear(GL_COLOR_BUFFER_BIT);
+    
+    // Начало нового ImGui кадра
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -240,6 +246,21 @@ void render_gui_frame() {
     ImGui::PopStyleVar(2);
     
     ImGui::Text("Configuration:");
+
+    // --- RingBuffer implementation selection ---
+    static int buffer_impl_radio = 0; // 0 - Custom, 1 - ConcurrentQueue
+    ImGui::Text("RingBuffer Implementation:");
+    ImGui::RadioButton("Custom", &buffer_impl_radio, 0); ImGui::SameLine();
+    ImGui::RadioButton("ConcurrentQueue (lock-free)", &buffer_impl_radio, 1);
+    static int last_buffer_impl_radio = 0;
+    if (buffer_impl_radio != last_buffer_impl_radio) {
+        last_buffer_impl_radio = buffer_impl_radio;
+        if (gui_events::on_buffer_impl_changed) {
+            gui_events::on_buffer_impl_changed(buffer_impl_radio);
+        }
+        add_log(buffer_impl_radio == 0 ? "Switched to Custom RingBuffer" : "Switched to ConcurrentQueue RingBuffer");
+    }
+
     
     // Allow parameter changes during simulation
     int temp_producers = num_producers_gui;
@@ -326,11 +347,11 @@ void render_gui_frame() {
     // Graph area
     if (ImGui::BeginChild("GraphRegion", ImVec2(0, 200), true)) {
         // Get graph data
-        const auto& producer_history = g_performance_history.get_producer_history();
-        const auto& consumer_history = g_performance_history.get_consumer_history();
+        const auto& throughput_history = g_performance_history.get_throughput_history();
+        // Consumer history no longer separate - using single throughput metric
         const auto& run_markers = g_performance_history.get_run_markers();
         
-        if (!producer_history.empty()) {
+        if (!throughput_history.empty()) {
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             
             // Calculate graph area dimensions
@@ -349,8 +370,8 @@ void render_gui_frame() {
             
             // Draw run separators
             for (const auto& marker : run_markers) {
-                if (marker > 0 && marker < static_cast<int>(producer_history.size())) {
-                    float x_pos = canvas_pos.x + (marker / static_cast<float>(producer_history.size() - 1)) * canvas_size.x;
+                if (marker > 0 && marker < static_cast<int>(throughput_history.size())) {
+                    float x_pos = canvas_pos.x + (marker / static_cast<float>(throughput_history.size() - 1)) * canvas_size.x;
                     draw_list->AddLine(
                         ImVec2(x_pos, canvas_pos.y),
                         ImVec2(x_pos, canvas_pos.y + canvas_size.y),
@@ -361,12 +382,12 @@ void render_gui_frame() {
             }
             
             // Draw producer graph
-            if (show_producer_graph && producer_history.size() > 1) {
-                for (size_t i = 0; i < producer_history.size() - 1; i++) {
-                    float x1 = canvas_pos.x + (i / static_cast<float>(producer_history.size() - 1)) * canvas_size.x;
-                    float y1 = canvas_pos.y + canvas_size.y - (producer_history[i] / max_display_speed) * canvas_size.y;
-                    float x2 = canvas_pos.x + ((i + 1) / static_cast<float>(producer_history.size() - 1)) * canvas_size.x;
-                    float y2 = canvas_pos.y + canvas_size.y - (producer_history[i + 1] / max_display_speed) * canvas_size.y;
+            if (show_producer_graph && throughput_history.size() > 1) {
+                for (size_t i = 0; i < throughput_history.size() - 1; i++) {
+                    float x1 = canvas_pos.x + (i / static_cast<float>(throughput_history.size() - 1)) * canvas_size.x;
+                    float y1 = canvas_pos.y + canvas_size.y - (throughput_history[i] / max_display_speed) * canvas_size.y;
+                    float x2 = canvas_pos.x + ((i + 1) / static_cast<float>(throughput_history.size() - 1)) * canvas_size.x;
+                    float y2 = canvas_pos.y + canvas_size.y - (throughput_history[i + 1] / max_display_speed) * canvas_size.y;
                     
                     draw_list->AddLine(
                         ImVec2(x1, y1),
@@ -378,21 +399,7 @@ void render_gui_frame() {
             }
             
             // Draw consumer graph
-            if (show_consumer_graph && consumer_history.size() > 1) {
-                for (size_t i = 0; i < consumer_history.size() - 1; i++) {
-                    float x1 = canvas_pos.x + (i / static_cast<float>(consumer_history.size() - 1)) * canvas_size.x;
-                    float y1 = canvas_pos.y + canvas_size.y - (consumer_history[i] / max_display_speed) * canvas_size.y;
-                    float x2 = canvas_pos.x + ((i + 1) / static_cast<float>(consumer_history.size() - 1)) * canvas_size.x;
-                    float y2 = canvas_pos.y + canvas_size.y - (consumer_history[i + 1] / max_display_speed) * canvas_size.y;
-                    
-                    draw_list->AddLine(
-                        ImVec2(x1, y1),
-                        ImVec2(x2, y2),
-                        ImGui::GetColorU32(ImVec4(0.4f, 0.8f, 0.4f, 1.0f)), // Green for consumers
-                        2.0f
-                    );
-                }
-            }
+            // Consumer graph removed as we now use a single throughput metric
             
             // Константа размера элемента данных (int = 4 байта)
             const int BYTES_PER_ITEM = 4;
@@ -510,6 +517,7 @@ void render_gui_frame() {
     ImGui::End(); // End "RingBufferGUI" window
 
     ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData()); // Отрисовка данных ImGui в OpenGL контекст
 }
 
 void shutdown_gui_components() {

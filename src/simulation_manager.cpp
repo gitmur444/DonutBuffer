@@ -1,4 +1,7 @@
 #include "simulation_manager.h"
+#include "ring_buffer_adapter.h"
+#include "concurrentqueue_adapter.h"
+
 #include <iostream> // For potential std::cerr, though logger is preferred
 #include <chrono>   // For std::chrono::milliseconds
 #include <sstream>  // For std::ostringstream
@@ -10,15 +13,34 @@ std::string format_thread_log(const std::string& message, int id, const std::str
     return oss.str();
 }
 
+namespace {
+std::unique_ptr<AbstractRingBuffer> create_ring_buffer(RingBufferType type, size_t capacity) {
+    if (type == RingBufferType::ConcurrentQueue)
+        return std::make_unique<ConcurrentQueueAdapter>(capacity);
+    else
+        return std::make_unique<RingBufferAdapter>(capacity);
+}
+}
+
 SimulationManager::SimulationManager(std::function<void(const std::string&)> logger)
     : simulation_active(false),
       stop_flag(false),
       num_producers_cfg(1),
       num_consumers_cfg(1),
       buffer_size_cfg(10),
+      buffer_type(RingBufferType::Custom),
       logger_func(logger) {
     log("SimulationManager created.");
 }
+
+void SimulationManager::set_buffer_type(RingBufferType type) {
+    buffer_type = type;
+}
+
+RingBufferType SimulationManager::get_buffer_type() const {
+    return buffer_type;
+}
+
 
 SimulationManager::~SimulationManager() {
     log("SimulationManager destroying...");
@@ -43,28 +65,16 @@ void SimulationManager::update_producers(int new_producer_count) {
         return;
     }
     
-    // Если текущее количество больше нового - останавливаем лишние потоки
-    if (new_producer_count < num_producers_cfg) {
-        log("Reducing producer count from " + std::to_string(num_producers_cfg) + 
-            " to " + std::to_string(new_producer_count));
-        
-        // Пока оставляем потоки работать, просто обновляем конфигурацию
-        // В реальной системе здесь можно было бы реализовать механизм безопасной остановки потоков
-        num_producers_cfg = new_producer_count;
-    } 
-    // Если нужно добавить продюсеров
-    else if (new_producer_count > num_producers_cfg) {
-        log("Increasing producer count from " + std::to_string(num_producers_cfg) + 
-            " to " + std::to_string(new_producer_count));
-        
-        // Запускаем дополнительные потоки продюсеров
-        int current_count = num_producers_cfg;
-        num_producers_cfg = new_producer_count;
-        
-        for (int i = current_count; i < new_producer_count; ++i) {
-            producer_threads.emplace_back(&SimulationManager::producer_task_impl, this, i + 1);
-        }
-    }
+    // В активной симуляции не меняем количество потоков, а только обновляем конфигурацию
+    // Изменение вступит в силу при следующем запуске симуляции
+    log("Producer count will be updated to " + std::to_string(new_producer_count) + 
+        " on next simulation restart (cannot modify active threads)");
+    
+    // Безопасно обновляем конфигурацию для следующего запуска
+    num_producers_cfg = new_producer_count;
+    
+    // Динамическое добавление/удаление потоков в активной симуляции отключено
+    // из-за возможных race condition и проблем с индексацией потоков
 }
 
 void SimulationManager::update_consumers(int new_consumer_count) {
@@ -81,28 +91,16 @@ void SimulationManager::update_consumers(int new_consumer_count) {
         return;
     }
     
-    // Если текущее количество больше нового - останавливаем лишние потоки
-    if (new_consumer_count < num_consumers_cfg) {
-        log("Reducing consumer count from " + std::to_string(num_consumers_cfg) + 
-            " to " + std::to_string(new_consumer_count));
-        
-        // Пока оставляем потоки работать, просто обновляем конфигурацию
-        // В реальной системе здесь можно было бы реализовать механизм безопасной остановки потоков
-        num_consumers_cfg = new_consumer_count;
-    } 
-    // Если нужно добавить консьюмеров
-    else if (new_consumer_count > num_consumers_cfg) {
-        log("Increasing consumer count from " + std::to_string(num_consumers_cfg) + 
-            " to " + std::to_string(new_consumer_count));
-        
-        // Запускаем дополнительные потоки консьюмеров
-        int current_count = num_consumers_cfg;
-        num_consumers_cfg = new_consumer_count;
-        
-        for (int i = current_count; i < new_consumer_count; ++i) {
-            consumer_threads.emplace_back(&SimulationManager::consumer_task_impl, this, i + 1);
-        }
-    }
+    // В активной симуляции не меняем количество потоков, а только обновляем конфигурацию
+    // Изменение вступит в силу при следующем запуске симуляции
+    log("Consumer count will be updated to " + std::to_string(new_consumer_count) + 
+        " on next simulation restart (cannot modify active threads)");
+    
+    // Безопасно обновляем конфигурацию для следующего запуска
+    num_consumers_cfg = new_consumer_count;
+    
+    // Динамическое добавление/удаление потоков в активной симуляции отключено
+    // из-за возможных race condition и проблем с индексацией потоков
 }
 
 void SimulationManager::update_buffer_size(int new_buffer_size) {
@@ -157,7 +155,7 @@ void SimulationManager::start() {
     }
     
     // Create new buffer
-    ring_buffer_ptr = std::make_unique<RingBuffer>(static_cast<size_t>(buffer_size_cfg));
+    ring_buffer_ptr = create_ring_buffer(buffer_type, static_cast<size_t>(buffer_size_cfg));
     
     // Reset stop flag and speed counters
     stop_flag.store(false);
@@ -225,7 +223,7 @@ void SimulationManager::reset_buffer() {
         log("Cannot reset buffer while simulation is active.");
         return;
     }
-    ring_buffer_ptr.reset(); // Destroys the old RingBuffer
+    ring_buffer_ptr.reset(); // Destroys the old buffer
     log("RingBuffer reset.");
 }
 
@@ -274,8 +272,8 @@ void SimulationManager::producer_task_impl(int id) {
             item_produced_count++;
             total_produced.fetch_add(1);
             
-            // Update speed measurements periodically
-            if (speed_measurement_active.load() && item_produced_count % 10 == 0) {
+            // Update speed measurements periodically (reduced frequency)
+            if (speed_measurement_active.load() && item_produced_count % 50 == 0) {
                 auto now = std::chrono::steady_clock::now();
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
                 if (elapsed > 0) {
@@ -284,9 +282,9 @@ void SimulationManager::producer_task_impl(int id) {
                 }
             }
             
-            // Log periodically or on specific events to avoid flooding
-            if (item_produced_count % 10 == 0) { 
-                 log(format_thread_log("produced item #" + std::to_string(item_produced_count) + ": " + std::to_string(item), id, "Producer"));
+            // Log periodically with reduced frequency to avoid flooding
+            if (item_produced_count % 100 == 0) { 
+                 log(format_thread_log("produced item #" + std::to_string(item_produced_count), id, "Producer"));
             }
         } else {
             if (stop_flag.load()) {
@@ -309,8 +307,8 @@ void SimulationManager::consumer_task_impl(int id) {
             item_consumed_count++;
             total_consumed.fetch_add(1);
             
-            // Update speed measurements periodically
-            if (speed_measurement_active.load() && item_consumed_count % 10 == 0) {
+            // Update speed measurements periodically (reduced frequency)
+            if (speed_measurement_active.load() && item_consumed_count % 50 == 0) {
                 auto now = std::chrono::steady_clock::now();
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
                 if (elapsed > 0) {
@@ -319,8 +317,8 @@ void SimulationManager::consumer_task_impl(int id) {
                 }
             }
             
-            if (item_consumed_count % 10 == 0) { 
-                log(format_thread_log("consumed item #" + std::to_string(item_consumed_count) + ": " + std::to_string(item), id, "Consumer"));
+            if (item_consumed_count % 100 == 0) { 
+                log(format_thread_log("consumed item #" + std::to_string(item_consumed_count), id, "Consumer"));
             }
         } else {
             if (stop_flag.load()) {

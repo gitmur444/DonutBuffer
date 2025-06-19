@@ -4,32 +4,41 @@
 // Global instance for easy access
 PerformanceHistory g_performance_history;
 
-PerformanceHistory::PerformanceHistory(size_t max_points) 
+PerformanceHistory::PerformanceHistory(size_t max_points, unsigned int min_update_interval_ms) 
     : max_history_points(max_points),
-      max_producer_speed(0.0f),
-      max_consumer_speed(0.0f) {
+      max_speed(0.0f),
+      min_update_interval(min_update_interval_ms),
+      last_update_time(std::chrono::steady_clock::now()) {
     // Reserve space to avoid frequent reallocations
-    producer_history.reserve(max_points);
-    consumer_history.reserve(max_points);
-    run_markers.reserve(100); // Assuming fewer than 100 runs
+    throughput_history.reserve(max_points);
+    run_markers.reserve(50); // Reducing from 100 to 50 - still plenty for most use cases
 }
 
-void PerformanceHistory::add_data_point(double producer_speed, double consumer_speed) {
+void PerformanceHistory::add_data_point(double throughput_speed) {
     std::lock_guard<std::mutex> lock(history_mutex);
     
-    // Add new data points
-    producer_history.push_back(static_cast<float>(producer_speed));
-    consumer_history.push_back(static_cast<float>(consumer_speed));
+    // Check if enough time has passed since the last update
+    auto current_time = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - last_update_time);
     
-    // Update max speeds
-    max_producer_speed = std::max(max_producer_speed, static_cast<float>(producer_speed));
-    max_consumer_speed = std::max(max_consumer_speed, static_cast<float>(consumer_speed));
+    if (elapsed < min_update_interval) {
+        // Not enough time has passed, skip this update
+        return;
+    }
+    
+    // Update the last update time
+    last_update_time = current_time;
+    
+    // Add new data point
+    throughput_history.push_back(static_cast<float>(throughput_speed));
+    
+    // Update max speed
+    max_speed = std::max(max_speed, static_cast<float>(throughput_speed));
     
     // Trim if exceeded max size
-    if (producer_history.size() > max_history_points) {
+    if (throughput_history.size() > max_history_points) {
         // Remove oldest points
-        producer_history.erase(producer_history.begin());
-        consumer_history.erase(consumer_history.begin());
+        throughput_history.erase(throughput_history.begin());
         
         // Adjust run markers
         for (auto& marker : run_markers) {
@@ -49,17 +58,13 @@ void PerformanceHistory::mark_new_run() {
     std::lock_guard<std::mutex> lock(history_mutex);
     
     // Add marker at current position in history
-    if (!producer_history.empty()) {
-        run_markers.push_back(static_cast<int>(producer_history.size()) - 1);
+    if (!throughput_history.empty()) {
+        run_markers.push_back(static_cast<int>(throughput_history.size()) - 1);
     }
 }
 
-const std::vector<float>& PerformanceHistory::get_producer_history() const {
-    return producer_history;
-}
-
-const std::vector<float>& PerformanceHistory::get_consumer_history() const {
-    return consumer_history;
+const std::vector<float>& PerformanceHistory::get_throughput_history() const {
+    return throughput_history;
 }
 
 const std::vector<int>& PerformanceHistory::get_run_markers() const {
@@ -68,21 +73,13 @@ const std::vector<int>& PerformanceHistory::get_run_markers() const {
 
 void PerformanceHistory::clear() {
     std::lock_guard<std::mutex> lock(history_mutex);
-    producer_history.clear();
-    consumer_history.clear();
+    throughput_history.clear();
     run_markers.clear();
-    max_producer_speed = 0.0f;
-    max_consumer_speed = 0.0f;
+    max_speed = 0.0f;
 }
 
-float PerformanceHistory::get_max_producer_speed() const {
-    return max_producer_speed;
-}
 
-float PerformanceHistory::get_max_consumer_speed() const {
-    return max_consumer_speed;
-}
 
 float PerformanceHistory::get_max_speed() const {
-    return std::max(max_producer_speed, max_consumer_speed);
+    return max_speed;
 }

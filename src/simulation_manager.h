@@ -1,7 +1,7 @@
 #ifndef SIMULATION_MANAGER_H
 #define SIMULATION_MANAGER_H
 
-#include "ring_buffer.h"
+#include "abstract_ring_buffer.h"
 #include <vector>
 #include <thread>
 #include <atomic>
@@ -10,8 +10,13 @@
 #include <string>
 #include <chrono>
 
+enum class RingBufferType { Custom, ConcurrentQueue };
+
 class SimulationManager {
 public:
+    void set_buffer_type(RingBufferType type);
+    RingBufferType get_buffer_type() const;
+
     SimulationManager(std::function<void(const std::string&)> logger);
     ~SimulationManager();
 
@@ -41,7 +46,7 @@ private:
     void consumer_task_impl(int id);
     void log(const std::string& message);
 
-    std::unique_ptr<RingBuffer> ring_buffer_ptr;
+    std::unique_ptr<AbstractRingBuffer> ring_buffer_ptr;
     std::vector<std::thread> producer_threads;
     std::vector<std::thread> consumer_threads;
     
@@ -58,6 +63,7 @@ private:
     std::atomic<size_t> total_produced{0};
     std::atomic<size_t> total_consumed{0};
     std::chrono::steady_clock::time_point start_time;
+    RingBufferType buffer_type = RingBufferType::Custom;
     std::atomic<double> producer_speed{0.0};
     std::atomic<double> consumer_speed{0.0};
     std::atomic<bool> speed_measurement_active{false};

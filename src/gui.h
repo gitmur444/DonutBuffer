@@ -58,6 +58,8 @@ void glfw_error_callback(int error, const char* description);
 // --- GUI Event Callbacks & State Update Functions ---
 namespace gui_events {
     // Callbacks for GUI to signal actions to the application logic
+    // 0 - Custom, 1 - ConcurrentQueue
+    extern std::function<void(int)> on_buffer_impl_changed;
     extern std::function<void(int /*producers*/, int /*consumers*/, int /*buffer_size*/)> on_start_simulation_request;
     extern std::function<void()> on_stop_simulation_request;
     
