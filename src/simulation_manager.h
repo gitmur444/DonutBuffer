@@ -1,7 +1,8 @@
 #ifndef SIMULATION_MANAGER_H
 #define SIMULATION_MANAGER_H
 
-#include "abstract_ring_buffer.h"
+#include "ringbuffer/abstract_ring_buffer.h"
+#include "ringbuffer/mutex_ring_buffer_adapter.h"
 #include <vector>
 #include <thread>
 #include <atomic>

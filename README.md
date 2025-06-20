@@ -1,36 +1,48 @@
 # DonutBuffer: Ring Buffer Visualizer
 
 ## Requirements
-- C++17 compiler (g++/clang++)
-- CMake 3.10+
+- C++20 compiler (g++/clang++, with module support)
+- CMake 3.28+ (recommended for best module support, current version after update: 4.0.3)
+- Ninja (for building with C++20 modules via CMake)
 - GLFW
 - Dear ImGui
 - GLAD
 
 ## Build & Run
 
-### Быстрый старт в Docker
+### Quick Start with Docker
+(Note: Dockerfile may need updates for C++20 module builds)
 
 ```sh
 docker build -t donutbuffer-test .
 docker run --rm donutbuffer-test --concurrent-vs-lockfree
 ```
 
-- Первый запуск собирает контейнер и проект.
-- Аргументы после имени образа пробрасываются в DonutBufferApp (например, можно запускать любые эксперименты).
+- The first run builds the container and the project.
+- Arguments after the image name are passed to `DonutBufferApp` (e.g., to run any experiment).
 
-### Build Instructions
+### Build Instructions (Local)
 ```bash
-mkdir -p build && cd build && cmake .. && make
+# Ensure Ninja is installed (e.g., brew install ninja)
+mkdir -p build
+cd build
+cmake .. -G Ninja # Specify Ninja as the generator
+cmake --build .  # Run the build through CMake (which will invoke Ninja)
+# or directly: ninja
 ```
 
 ## Run
+From the `build` directory:
 ```bash
 ./DonutBufferApp
 ```
+Or, if you are in the project's root directory:
+```bash
+./build/DonutBufferApp
+```
 
 ## Controls
-- Set number of producers, consumers, and buffer size in the GUI
-- Start/stop simulation with buttons
-- View real-time buffer usage and speed metrics
-- See performance history graph
+- Set the number of producers, consumers, and buffer size in the GUI.
+- Start/stop the simulation using the buttons.
+- View real-time buffer usage and speed metrics.
+- See the performance history graph.

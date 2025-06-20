@@ -1,7 +1,7 @@
-#include "gui_thread.h"
+#include "gui/gui_thread.h"
 #include "simulation_manager.h"
 #include "performance_history.h"
-#include "gui.h"
+#include "gui/gui.h"
 
 #include <GLFW/glfw3.h>
 #include <chrono>

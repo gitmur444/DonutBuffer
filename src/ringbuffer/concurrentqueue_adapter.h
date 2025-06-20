@@ -1,5 +1,5 @@
 #pragma once
-#include "abstract_ring_buffer.h"
+#include "ringbuffer/abstract_ring_buffer.h"
 #include "../external/concurrentqueue/concurrentqueue.h" // moodycamel::ConcurrentQueue
 #include <atomic>
 #include <memory>
@@ -9,7 +9,7 @@ public:
     ConcurrentQueueAdapter(size_t capacity) : queue(capacity), max_capacity(capacity), count(0) {}
     bool produce(int item, int /*producer_id*/, const std::atomic<bool>& stop_flag) override {
         if (stop_flag) return false;
-        // Ограничение размера: concurrentqueue не блокирует, поэтому считаем вручную
+        // Capacity limit: concurrentqueue is non-blocking, so we count manually
         size_t expected;
         do {
             expected = count.load();

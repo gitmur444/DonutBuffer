@@ -1,6 +1,7 @@
 #include "simulation_manager.h"
-#include "ring_buffer_adapter.h"
-#include "concurrentqueue_adapter.h"
+#include "ringbuffer/ring_buffer_adapter.h"
+#include "ringbuffer/concurrentqueue_adapter.h"
+#include "ringbuffer/mutex_ring_buffer_adapter.h"
 
 #include <iostream> // For potential std::cerr, though logger is preferred
 #include <chrono>   // For std::chrono::milliseconds
@@ -18,7 +19,7 @@ std::unique_ptr<AbstractRingBuffer> create_ring_buffer(RingBufferType type, size
     if (type == RingBufferType::ConcurrentQueue)
         return std::make_unique<ConcurrentQueueAdapter>(capacity);
     else
-        return std::make_unique<RingBufferAdapter>(capacity);
+        return std::make_unique<MutexRingBufferAdapter>(capacity);
 }
 }
 
@@ -52,72 +53,72 @@ SimulationManager::~SimulationManager() {
 }
 
 void SimulationManager::update_producers(int new_producer_count) {
-    // Проверка допустимости значения
+    // Check if the value is valid
     if (new_producer_count <= 0) {
         log("Cannot set producers to zero or negative value");
         return;
     }
     
     if (!simulation_active.load()) {
-        // Если симуляция не запущена, просто обновляем конфигурацию
+        // If the simulation is not running, just update the configuration
         num_producers_cfg = new_producer_count;
         log("Producer count updated to " + std::to_string(new_producer_count) + " (will take effect on next start)");
         return;
     }
     
-    // В активной симуляции не меняем количество потоков, а только обновляем конфигурацию
-    // Изменение вступит в силу при следующем запуске симуляции
+    // Do not change the number of threads in an active simulation, just update the configuration
+    // The change will take effect on the next simulation start
     log("Producer count will be updated to " + std::to_string(new_producer_count) + 
         " on next simulation restart (cannot modify active threads)");
     
-    // Безопасно обновляем конфигурацию для следующего запуска
+    // Safely update the configuration for the next run
     num_producers_cfg = new_producer_count;
     
-    // Динамическое добавление/удаление потоков в активной симуляции отключено
-    // из-за возможных race condition и проблем с индексацией потоков
+    // Dynamic addition/removal of threads in active simulation is disabled
+    // due to possible race conditions and thread indexing issues
 }
 
 void SimulationManager::update_consumers(int new_consumer_count) {
-    // Проверка допустимости значения
+    // Check if the value is valid
     if (new_consumer_count <= 0) {
         log("Cannot set consumers to zero or negative value");
         return;
     }
     
     if (!simulation_active.load()) {
-        // Если симуляция не запущена, просто обновляем конфигурацию
+        // If the simulation is not running, just update the configuration
         num_consumers_cfg = new_consumer_count;
         log("Consumer count updated to " + std::to_string(new_consumer_count) + " (will take effect on next start)");
         return;
     }
     
-    // В активной симуляции не меняем количество потоков, а только обновляем конфигурацию
-    // Изменение вступит в силу при следующем запуске симуляции
+    // Do not change the number of threads in an active simulation, just update the configuration
+    // The change will take effect on the next simulation start
     log("Consumer count will be updated to " + std::to_string(new_consumer_count) + 
         " on next simulation restart (cannot modify active threads)");
     
-    // Безопасно обновляем конфигурацию для следующего запуска
+    // Safely update the configuration for the next run
     num_consumers_cfg = new_consumer_count;
     
-    // Динамическое добавление/удаление потоков в активной симуляции отключено
-    // из-за возможных race condition и проблем с индексацией потоков
+    // Dynamic addition/removal of threads in active simulation is disabled
+    // due to possible race conditions and thread indexing issues
 }
 
 void SimulationManager::update_buffer_size(int new_buffer_size) {
-    // Проверка допустимости значения
+    // Check if the value is valid
     if (new_buffer_size <= 0) {
         log("Cannot set buffer size to zero or negative value");
         return;
     }
     
     if (!simulation_active.load()) {
-        // Если симуляция не запущена, просто обновляем конфигурацию
+        // If the simulation is not running, just update the configuration
         buffer_size_cfg = new_buffer_size;
         log("Buffer size updated to " + std::to_string(new_buffer_size) + " (will take effect on next start)");
         return;
     }
     
-    // Если симуляция запущена, сообщаем что размер буфера изменится при следующем запуске
+    // If the simulation is running, inform that the buffer size will change on the next start
     buffer_size_cfg = new_buffer_size;
     log("Buffer size will be updated to " + std::to_string(new_buffer_size) + 
         " on next simulation restart (cannot resize active buffer)");

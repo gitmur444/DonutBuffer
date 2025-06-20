@@ -1,5 +1,5 @@
-#include "gui.h"
-#include "ring_buffer.h" // For RingBuffer class usage
+#include "gui/gui_thread.h" // локальный include, оставить без изменений
+#include "ringbuffer/mutex_ring_buffer.h" // For MutexRingBuffer class usage
 #include "performance_history.h" // For performance history tracking
 
 #include "imgui.h"
@@ -20,6 +20,7 @@
 #include <thread>
 #include <memory>
 #include <list>
+#include <functional>
 #include <mutex>
 #include <atomic> // Required for std::atomic
 
@@ -122,7 +123,7 @@ bool initialize_platform_and_window(GLFWwindow*& out_window, const char*& out_gl
         glfwTerminate();
         return false;
     }
-    add_log("Platform and window initialized successfully."); // Added log message
+    // add_log("Platform and window initialized successfully."); // Removed: no global add_log available
     return true;
 }
 
@@ -161,10 +162,10 @@ void add_log(const std::string& message) {
     std::stringstream ss;
     ss << time_buf << "." << std::setfill('0') << std::setw(3) << ms.count() << ": " << message;
     
-    // Вывод в консоль для всех сообщений
+    // Output to console for all messages
     std::cout << ss.str() << std::endl;
     
-    // В GUI отображаем только команды пользователя
+    // Only user commands are shown in the GUI
     bool is_user_command = message.find("User requested") != std::string::npos || 
                            message.find("Start simulation requested") != std::string::npos ||
                            message.find("Stop simulation requested") != std::string::npos ||
@@ -222,16 +223,16 @@ void init_gui_components(GLFWwindow* window, const char* glsl_version) {
 }
 
 void render_gui_frame() {
-    // Очистка экрана перед началом рендеринга нового кадра
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Тёмно-серый фон
+    // Clear the screen before starting to render a new frame
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Dark gray background
     glClear(GL_COLOR_BUFFER_BIT);
     
-    // Начало нового ImGui кадра
+    // Start a new ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    // Создаем полноэкранное окно без заголовка
+    // Create a fullscreen window without a title bar
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
@@ -401,10 +402,10 @@ void render_gui_frame() {
             // Draw consumer graph
             // Consumer graph removed as we now use a single throughput metric
             
-            // Константа размера элемента данных (int = 4 байта)
+            // Constant size of data element (int = 4 bytes)
             const int BYTES_PER_ITEM = 4;
             
-            // Вычисляем и форматируем данные в байтах/КБ/МБ/ГБ
+            // Calculate and format data in bytes/KB/MB/GB
             char label[64];
             double max_bytes = max_display_speed * BYTES_PER_ITEM;
             
@@ -421,15 +422,15 @@ void render_gui_frame() {
             draw_list->AddText(ImVec2(canvas_pos.x + 5, canvas_pos.y + 5), 
                              ImGui::GetColorU32(ImGuiCol_Text), label);
             
-            // Добавляем вертикальную шкалу с делениями
+            // Add vertical scale with divisions
             const float y_scale = canvas_size.y / max_display_speed;
-            const int num_ticks = 5; // Количество делений на шкале
+            const int num_ticks = 5; // Number of divisions on the scale
             
             for (int i = 0; i < num_ticks; i++) {
                 float y_value = max_display_speed * (i / float(num_ticks - 1));
                 float y_pos = canvas_pos.y + canvas_size.y - y_value * y_scale;
                 
-                // Горизонтальная линия для метки
+                // Horizontal line for label
                 draw_list->AddLine(
                     ImVec2(canvas_pos.x, y_pos),
                     ImVec2(canvas_pos.x + 5, y_pos),
@@ -437,7 +438,7 @@ void render_gui_frame() {
                     1.0f
                 );
                 
-                // Форматирование подписи с учетом единиц измерения
+                // Format label with unit consideration
                 char y_label[32];
                 double bytes = y_value * BYTES_PER_ITEM;
                 

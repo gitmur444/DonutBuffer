@@ -1,8 +1,8 @@
 #include "application.h"
 #include "performance_history.h"
 #include "simulation_manager.h"
-#include "gui.h"
-#include "gui_thread.h"
+#include "gui/gui.h"
+#include "gui/gui_thread.h"
 #include <GLFW/glfw3.h> // For glfwWindowShouldClose, glfwPollEvents, glfwSwapBuffers, glfwDestroyWindow, glfwTerminate, glfwGetFramebufferSize
 #include "imgui.h" // For ImGui::GetDrawData, ImVec4
 #include "../imgui_backends/imgui_impl_opengl3.h" // For ImGui_ImplOpenGL3_RenderDrawData
@@ -56,13 +56,14 @@ bool Application::initialize(int width, int height, const char* title) {
     }
 
     // Setup GUI callbacks
-    gui_events::on_start_simulation_request = [this](int p, int c, int bs) {
-        this->handle_start_simulation_request(p, c, bs);
+    gui_events::on_start_simulation_request = [this](int producers, int consumers, int buffer_size) {
+        this->handle_start_simulation_request(producers, consumers, buffer_size);
     };
+
     gui_events::on_buffer_impl_changed = [this](int impl) {
         if (simulationManager) {
             simulationManager->set_buffer_type(impl == 0 ? RingBufferType::Custom : RingBufferType::ConcurrentQueue);
-            simulationManager->reset_buffer(); // пересоздать буфер, история графика не сбрасывается
+            simulationManager->reset_buffer(); // recreate buffer, performance history is not reset
             add_log(impl == 0 ? "Application: Switched to Custom RingBuffer" : "Application: Switched to ConcurrentQueue RingBuffer");
         }
     };
@@ -259,13 +260,13 @@ void Application::handle_stop_simulation_request() {
     add_log("Application: Requesting simulation to stop...");
     simulationManager->request_stop();
     
-    // Важно - присоединяем потоки, чтобы гарантировать их завершение
+    // Important - join threads to guarantee their completion
     add_log("Application: Joining threads to ensure clean stop...");
     simulationManager->join_threads();
     add_log("Application: All threads joined, simulation stopped.");
 }
 
-// Обработчики для динамического изменения параметров
+// Handlers for dynamic parameter changes
 void Application::handle_producer_count_update(int new_count) {
     if (!simulationManager) {
         add_log("ERROR: Cannot update producer count: SimulationManager is null.");
