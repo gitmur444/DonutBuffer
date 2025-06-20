@@ -1,13 +1,8 @@
-cmake_minimum_required(VERSION 3.20) # Increased for better C++20 module support
-set(CMAKE_VERBOSE_MAKEFILE ON) # Show full compile commands
+cmake_minimum_required(VERSION 3.10)
 project(DonutBufferApp LANGUAGES CXX C)
-
-set(CMAKE_CXX_EXTENSIONS OFF) # Disable GNU extensions
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_SCAN_FOR_MODULES ON) # Enable module dependency scanning
-
 
 # --- Dear ImGui --- 
 # ImGui source files are in 'imgui/' subdirectory.
@@ -26,13 +21,11 @@ target_include_directories(imgui PUBLIC
     glad/include    # For glad.h needed by imgui_impl_opengl3.cpp
 )
 target_link_libraries(imgui PUBLIC glfw glad)
-set_property(TARGET imgui PROPERTY CXX_SCAN_FOR_MODULES OFF)
 
 # --- GLAD --- 
 # GLAD files are in 'glad/src/' and 'glad/include/'
 add_library(glad glad/src/glad.c)
 target_include_directories(glad PUBLIC glad/include)
-set_property(TARGET glad PROPERTY CXX_SCAN_FOR_MODULES OFF)
 
 # --- GLFW --- 
 
@@ -44,43 +37,25 @@ find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
 
 # --- Main Executable --- 
-# --- Source Files ---
-file(GLOB_RECURSE CXX_MODULE_INTERFACE_FILES CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/src/*.ixx"
-    "${PROJECT_SOURCE_DIR}/src/*/*.ixx"
+add_executable(DonutBufferApp
+    src/main.cpp          # Updated path and added files
+    src/simulation_manager.cpp # Added
+    src/application.cpp      # Added
+    src/performance_history.cpp # Added performance history
+    src/gui/gui.cpp           # GUI implementation
+    src/gui/gui_thread.cpp    # GUI thread implementation
+    src/flags.cpp         # Flags parser implementation
+    src/ringbuffer/mutex_ring_buffer.cpp # MutexRingBuffer implementation
+    src/ringbuffer/lockfree_ring_buffer.cpp # LockFreeRingBuffer implementation
+    src/experiments/experiment_base.cpp
+    src/experiments/experiment_base.h
+    src/experiments/concurrent_vs_lockfree_experiment.cpp
+    src/experiments/concurrent_vs_lockfree_experiment.h
+    src/experiments/mutex_vs_lockfree_experiment.cpp
+    src/experiments/mutex_vs_lockfree_experiment.h
 )
 
-file(GLOB_RECURSE CXX_MODULE_IMPLEMENTATION_FILES_ALL CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/src/*.cpp"
-    "${PROJECT_SOURCE_DIR}/src/*/*.cpp"
-)
 
-# Exclude main.cpp from implementation files as it's handled separately
-list(FILTER CXX_MODULE_IMPLEMENTATION_FILES_ALL EXCLUDE REGEX ".*/main\\.cpp$")
-set(CXX_MODULE_IMPLEMENTATION_FILES ${CXX_MODULE_IMPLEMENTATION_FILES_ALL})
-
-# --- Main Executable ---
-add_executable(DonutBufferApp "") # Initialize with empty
-
-target_sources(DonutBufferApp
-    PRIVATE
-        "${PROJECT_SOURCE_DIR}/src/main.cpp"
-        ${CXX_MODULE_IMPLEMENTATION_FILES}
-        # External sources (ImGui, GLAD) are added as libraries, so not needed here directly
-    PUBLIC
-        FILE_SET CXX_MODULES BASE_DIRS "${PROJECT_SOURCE_DIR}/src" FILES ${CXX_MODULE_INTERFACE_FILES}
-)
-
-# Add module-specific compile options for DonutBufferApp target
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
-    message(STATUS "Clang/AppleClang detected.")
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    message(STATUS "GCC detected.")
-else()
-    message(WARNING "Compiler not detected as Clang or GCC. C++20 module flags may not be correctly set for DonutBufferApp.")
-endif()
-
-# Link libraries
 target_link_libraries(DonutBufferApp
     PRIVATE
     imgui
