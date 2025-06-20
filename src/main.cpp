@@ -1,7 +1,7 @@
-import application;
-import gui;
-import flags;
-import experiments.experiment_base;
+#include "application.h" // Assuming Application class is defined here
+#include "gui/gui.h"       // Assuming GUI related functions/classes are here
+#include "flags.h"         // Assuming AppFlags and parse_flags are defined here
+#include "experiments/experiment_base.h" // Assuming ExperimentBase is here
 
 #include "imgui.h" // For ImVec4, ImGui::GetDrawData. This is a C library, so it remains an include.
 #include <iostream> // For std::cerr in case of critical app init failure
