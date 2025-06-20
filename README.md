@@ -1,37 +1,36 @@
-# Ring Buffer GUI
+# DonutBuffer: Ring Buffer Visualizer
 
-Interactive multithreaded ring buffer visualization with Dear ImGui and OpenGL.
-
-## Features
-
-- Real-time visualization of producer-consumer pattern with a ring buffer
-- Configurable number of producers and consumers
-- Performance monitoring with real-time speedometer
-- Historical performance visualization with persistent graph
-- Thread-safe implementation with mutex and condition variables
-
-## Dependencies
-
+## Requirements
+- C++17 compiler (g++/clang++)
+- CMake 3.10+
 - GLFW
 - Dear ImGui
-- GLAD (OpenGL loader)
-- C++17 standard library
+- GLAD
 
-## Building
+## Build & Run
 
-```bash
-# Create build directory
-mkdir -p build
-cd build
+### Быстрый старт в Docker
 
-# Configure and build
-cmake ..
-make
+```sh
+docker build -t donutbuffer-test .
+docker run --rm donutbuffer-test --concurrent-vs-lockfree
 ```
 
-## Usage
+- Первый запуск собирает контейнер и проект.
+- Аргументы после имени образа пробрасываются в DonutBufferApp (например, можно запускать любые эксперименты).
 
-- Adjust producer and consumer counts, buffer size
-- Start/stop simulation
-- Monitor buffer usage and processing speeds
-- Compare performance across different runs using the graph
+### Build Instructions
+```bash
+mkdir -p build && cd build && cmake .. && make
+```
+
+## Run
+```bash
+./DonutBufferApp
+```
+
+## Controls
+- Set number of producers, consumers, and buffer size in the GUI
+- Start/stop simulation with buttons
+- View real-time buffer usage and speed metrics
+- See performance history graph

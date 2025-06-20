@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(RingBufferGUI LANGUAGES CXX C)
+project(DonutBufferApp LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -37,17 +37,26 @@ find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
 
 # --- Main Executable --- 
-add_executable(${PROJECT_NAME}
+add_executable(DonutBufferApp
     src/main.cpp          # Updated path and added files
-    src/gui.cpp           # Added
-    src/ring_buffer.cpp   # Added
     src/simulation_manager.cpp # Added
     src/application.cpp      # Added
     src/performance_history.cpp # Added performance history
-    src/gui_thread.cpp     # Added GUI thread implementation
+    src/gui/gui.cpp           # GUI implementation
+    src/gui/gui_thread.cpp    # GUI thread implementation
+    src/flags.cpp         # Flags parser implementation
+    src/ringbuffer/mutex_ring_buffer.cpp # MutexRingBuffer implementation
+    src/ringbuffer/lockfree_ring_buffer.cpp # LockFreeRingBuffer implementation
+    src/experiments/experiment_base.cpp
+    src/experiments/experiment_base.h
+    src/experiments/concurrent_vs_lockfree_experiment.cpp
+    src/experiments/concurrent_vs_lockfree_experiment.h
+    src/experiments/mutex_vs_lockfree_experiment.cpp
+    src/experiments/mutex_vs_lockfree_experiment.h
 )
 
-target_link_libraries(${PROJECT_NAME}
+
+target_link_libraries(DonutBufferApp
     PRIVATE
     imgui
     glad
@@ -57,7 +66,7 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 # Specify include directories for the main target (${PROJECT_NAME})
-target_include_directories(${PROJECT_NAME} PUBLIC
+target_include_directories(DonutBufferApp PUBLIC
     src/                # Added: For gui.h, ring_buffer.h
     imgui/              # For imgui.h (used by gui.cpp, main.cpp)
     glad/include        # For glad.h (used by main.cpp, gui.cpp)
@@ -66,18 +75,21 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 # For macOS, ensure the executable is bundled if needed
 if(APPLE)
-    set(CMAKE_MACOSX_BUNDLE_GUI_IDENTIFIER "com.example.ringbuffergui")
-    set(CMAKE_MACOSX_BUNDLE_BUNDLE_NAME "RingBufferGUI")
-    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE TRUE) # Ensure .app bundle is created
-    target_link_libraries(${PROJECT_NAME} PRIVATE "-framework Cocoa" "-framework IOKit" "-framework CoreVideo" "-framework OpenGL") # Explicitly link required frameworks on macOS
+    set(CMAKE_MACOSX_BUNDLE_GUI_IDENTIFIER "com.example.donutbufferapp")
+    set(CMAKE_MACOSX_BUNDLE_BUNDLE_NAME "DonutBufferApp")
+    set_target_properties(DonutBufferApp PROPERTIES MACOSX_BUNDLE TRUE) # Ensure .app bundle is created
+    target_link_libraries(DonutBufferApp PRIVATE "-framework Cocoa" "-framework IOKit" "-framework CoreVideo" "-framework OpenGL") # Explicitly link required frameworks on macOS
     # If you have an Info.plist, add it here:
-    # set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist)
+    # set_target_properties(DonutBufferApp PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist)
 endif()
 
 message(STATUS "---------------------------------------------------------------------")
-message(STATUS "Project: ${PROJECT_NAME}")
+message(STATUS "Project: DonutBufferApp")
 message(STATUS "To build this project, ensure you have setup the dependencies:")
 message(STATUS "1. GLFW installed (e.g., 'brew install glfw' on macOS).")
+message(STATUS "2. Dear ImGui source files in 'donut_buffer_gui/imgui/' directory.")
+message(STATUS "3. Dear ImGui backend files (imgui_impl_*.cpp/h) in 'donut_buffer_gui/' directory.")
+message(STATUS "4. GLAD files (glad.c, glad.h, KHR) in 'donut_buffer_gui/glad/' subdirectories.")
 message(STATUS "2. Dear ImGui source files in 'ring_buffer_gui/imgui/' directory.")
 message(STATUS "3. Dear ImGui backend files (imgui_impl_*.cpp/h) in 'ring_buffer_gui/' directory.")
 message(STATUS "4. GLAD files (glad.c, glad.h, KHR) in 'ring_buffer_gui/glad/' subdirectories.")
