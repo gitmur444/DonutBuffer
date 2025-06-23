@@ -5,8 +5,9 @@ MutexRingBuffer::MutexRingBuffer(size_t capacity) : capacity(capacity), buffer(c
 
 bool MutexRingBuffer::produce(int item, int producer_id, const std::atomic<bool>& stop_flag) {
     std::unique_lock<std::mutex> lock(mutex);
-    if (!cv_not_full.wait_for(lock, std::chrono::milliseconds(100), [&] { return count < capacity || stop_flag; })) {
-        return !stop_flag;
+    if (!cv_not_full.wait_for(lock, std::chrono::milliseconds(100), [&] { return count < capacity || stop_flag.load(); })) {
+        // Timed out while buffer was full and stop was not requested
+        return false;
     }
     if (stop_flag) {
         return false;
@@ -21,15 +22,16 @@ bool MutexRingBuffer::produce(int item, int producer_id, const std::atomic<bool>
 
 bool MutexRingBuffer::consume(int& item, int consumer_id, const std::atomic<bool>& stop_flag) {
     std::unique_lock<std::mutex> lock(mutex);
-    if (!cv_not_empty.wait_for(lock, std::chrono::milliseconds(100), [&] { return count > 0 || stop_flag; })) {
-        return !stop_flag;
+    if (!cv_not_empty.wait_for(lock, std::chrono::milliseconds(100), [&] { return count > 0 || stop_flag.load(); })) {
+        // Timed out with no items available
+        return false;
     }
     if (count == 0 && stop_flag) {
         return false;
     }
     if (count == 0) {
-        item = 0;
-        return true;
+        // No item available
+        return false;
     }
     item = buffer[head];
     head = (head + 1) % capacity;
