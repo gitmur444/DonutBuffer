@@ -8,7 +8,7 @@ class ConcurrentQueueAdapter : public AbstractRingBuffer {
 public:
     ConcurrentQueueAdapter(size_t capacity) : queue(capacity), max_capacity(capacity), count(0) {}
     bool produce(int item, int /*producer_id*/, const std::atomic<bool>& stop_flag) override {
-        if (stop_flag) return false;
+        if (stop_flag.load()) return false;
         // Capacity limit: concurrentqueue is non-blocking, so we count manually
         size_t expected;
         do {
@@ -20,7 +20,7 @@ public:
         return ok;
     }
     bool consume(int& item, int /*consumer_id*/, const std::atomic<bool>& stop_flag) override {
-        if (stop_flag) return false;
+        if (stop_flag.load()) return false;
         bool ok = queue.try_dequeue(item);
         if (ok) count.fetch_sub(1);
         return ok;

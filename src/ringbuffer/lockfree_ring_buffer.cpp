@@ -12,7 +12,7 @@ LockFreeRingBuffer::LockFreeRingBuffer(size_t capacity)
 bool LockFreeRingBuffer::produce(int item, int /*producer_id*/, const std::atomic<bool>& stop_flag) {
     size_t pos;
     Slot* slot;
-    while (!stop_flag) {
+    while (!stop_flag.load()) {
         size_t cur_tail = tail.load(std::memory_order_relaxed);
         pos = cur_tail % capacity;
         slot = &buffer[pos];
@@ -37,7 +37,7 @@ bool LockFreeRingBuffer::produce(int item, int /*producer_id*/, const std::atomi
 bool LockFreeRingBuffer::consume(int& item, int /*consumer_id*/, const std::atomic<bool>& stop_flag) {
     size_t pos;
     Slot* slot;
-    while (!stop_flag) {
+    while (!stop_flag.load()) {
         size_t cur_head = head.load(std::memory_order_relaxed);
         pos = cur_head % capacity;
         slot = &buffer[pos];

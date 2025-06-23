@@ -9,7 +9,7 @@ bool MutexRingBuffer::produce(int item, int producer_id, const std::atomic<bool>
         // Timed out while buffer was full and stop was not requested
         return false;
     }
-    if (stop_flag) {
+    if (stop_flag.load()) {
         return false;
     }
     buffer[tail] = item;
@@ -26,7 +26,7 @@ bool MutexRingBuffer::consume(int& item, int consumer_id, const std::atomic<bool
         // Timed out with no items available
         return false;
     }
-    if (count == 0 && stop_flag) {
+    if (count == 0 && stop_flag.load()) {
         return false;
     }
     if (count == 0) {
