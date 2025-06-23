@@ -15,11 +15,23 @@ RUN apt-get update && \
     libxcursor-dev \
     libgl1-mesa-dev \
     libglu1-mesa-dev \
+    python3 \
+    python3-pip \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем весь проект внутрь контейнера
 WORKDIR /app
 COPY . .
+
+# Install Python requirements if present
+RUN if [ -f mcp/requirements.txt ]; then \
+        pip3 install --no-cache-dir -r mcp/requirements.txt; \
+    fi
+
+# Install Ollama and pull llama3 model
+RUN curl -fsSL https://ollama.ai/install.sh | sh && \
+    ollama pull llama3 || true
 
 # Собираем проект через CMake
 RUN mkdir -p build && cd build && cmake .. && make -j$(nproc)
