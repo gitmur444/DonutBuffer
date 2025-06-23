@@ -21,6 +21,13 @@ docker run --rm donutbuffer-test --concurrent-vs-lockfree
 - The first run builds the container and the project.
 - Arguments after the image name are passed to `DonutBufferApp` (e.g., to run any experiment).
 
+### Quick Start with Codespaces
+This repository includes a [dev container](https://containers.dev/) configuration. If you open it in GitHub Codespaces (or any editor supporting dev containers), the environment will be prepared automatically:
+
+```bash
+./build/DonutBufferApp
+```
+
 ### Build Instructions (Local)
 ```bash
 # Ensure Ninja is installed (e.g., brew install ninja)
