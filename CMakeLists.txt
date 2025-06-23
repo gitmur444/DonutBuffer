@@ -35,6 +35,7 @@ find_package(OpenGL REQUIRED)
 
 # --- Threads --- 
 find_package(Threads REQUIRED)
+enable_testing()
 
 # --- Main Executable --- 
 add_executable(DonutBufferApp
@@ -72,6 +73,8 @@ target_include_directories(DonutBufferApp PUBLIC
     glad/include        # For glad.h (used by main.cpp, gui.cpp)
     imgui_backends/     # Added: For imgui_impl_glfw.h, imgui_impl_opengl3.h (used by gui.cpp, main.cpp)
 )
+
+add_subdirectory(tests)
 
 # For macOS, ensure the executable is bundled if needed
 if(APPLE)
