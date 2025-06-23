@@ -35,6 +35,7 @@ find_package(OpenGL REQUIRED)
 
 # --- Threads --- 
 find_package(Threads REQUIRED)
+enable_testing()
 
 # --- Main Executable --- 
 add_executable(DonutBufferApp
@@ -73,6 +74,8 @@ target_include_directories(DonutBufferApp PUBLIC
     imgui_backends/     # Added: For imgui_impl_glfw.h, imgui_impl_opengl3.h (used by gui.cpp, main.cpp)
 )
 
+add_subdirectory(tests)
+
 # For macOS, ensure the executable is bundled if needed
 if(APPLE)
     set(CMAKE_MACOSX_BUNDLE_GUI_IDENTIFIER "com.example.donutbufferapp")
@@ -87,10 +90,7 @@ message(STATUS "----------------------------------------------------------------
 message(STATUS "Project: DonutBufferApp")
 message(STATUS "To build this project, ensure you have setup the dependencies:")
 message(STATUS "1. GLFW installed (e.g., 'brew install glfw' on macOS).")
-message(STATUS "2. Dear ImGui source files in 'donut_buffer_gui/imgui/' directory.")
-message(STATUS "3. Dear ImGui backend files (imgui_impl_*.cpp/h) in 'donut_buffer_gui/' directory.")
-message(STATUS "4. GLAD files (glad.c, glad.h, KHR) in 'donut_buffer_gui/glad/' subdirectories.")
-message(STATUS "2. Dear ImGui source files in 'ring_buffer_gui/imgui/' directory.")
-message(STATUS "3. Dear ImGui backend files (imgui_impl_*.cpp/h) in 'ring_buffer_gui/' directory.")
-message(STATUS "4. GLAD files (glad.c, glad.h, KHR) in 'ring_buffer_gui/glad/' subdirectories.")
+message(STATUS "2. Dear ImGui source files are in the 'imgui/' directory.")
+message(STATUS "3. Dear ImGui backend files (imgui_impl_*.cpp/h) are in the 'imgui_backends/' directory.")
+message(STATUS "4. GLAD files (glad.c, glad.h, KHR) are in the 'glad/' directory.")
 message(STATUS "---------------------------------------------------------------------")

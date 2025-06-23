@@ -2,7 +2,7 @@
 
 ## Requirements
 - C++20 compiler (g++/clang++, with module support)
-- CMake 3.28+ (recommended for best module support, current version after update: 4.0.3)
+- CMake 3.28+ (recommended for best module support, current version after update: 3.28.3)
 - Ninja (for building with C++20 modules via CMake)
 - GLFW
 - Dear ImGui
