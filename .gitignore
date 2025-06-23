@@ -19,4 +19,6 @@ build/
 # Executables
 *.exe
 *.out
+codebase/ring_buffer
+mcp/__pycache__/
 *.app
