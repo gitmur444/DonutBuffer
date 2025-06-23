@@ -18,6 +18,8 @@ docker build -t donutbuffer-test .
 docker run --rm donutbuffer-test --concurrent-vs-lockfree
 ```
 
+The Docker image now installs Python requirements from `mcp/requirements.txt` and sets up Ollama with the `llama3` model. If `mcp/requirements.txt` is missing, the step is skipped.
+
 - The first run builds the container and the project.
 - Arguments after the image name are passed to `DonutBufferApp` (e.g., to run any experiment).
 
