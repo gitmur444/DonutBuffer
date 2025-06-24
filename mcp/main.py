@@ -13,7 +13,29 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Detect intent of a command")
     parser.add_argument("text", help="User command text")
     parser.add_argument("--full-response", action="store_true", help="Show full response instead of just intent")
+    parser.add_argument("--provider", choices=["ollama", "openai"], help="LLM provider to use (default: from LLM_PROVIDER env var or 'ollama')")
+    parser.add_argument("--openai-key", help="OpenAI API key (default: from OPENAI_API_KEY env var)")
+    parser.add_argument("--model", help="Model to use with provider (default: from env var or provider default)")
     args = parser.parse_args()
+    
+    # Установка API ключа если указан
+    if args.openai_key:
+        import os
+        os.environ["OPENAI_API_KEY"] = args.openai_key
+        
+    # Установка провайдера если указан
+    if args.provider:
+        import os
+        os.environ["LLM_PROVIDER"] = args.provider
+        
+    # Установка модели если указана
+    if args.model:
+        import os
+        provider = os.environ.get("LLM_PROVIDER", "ollama").lower()
+        if provider == "ollama":
+            os.environ["OLLAMA_MODEL"] = args.model
+        elif provider == "openai":
+            os.environ["OPENAI_MODEL"] = args.model
     
     # Detect user intent
     intent = detect_intent(args.text)

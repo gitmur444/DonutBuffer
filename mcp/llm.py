@@ -62,12 +62,36 @@ class OpenAIProvider(LLMProvider):
     def call_model(self, prompt: str, structured: bool = False) -> str:
         """Вызвать OpenAI API и вернуть ответ в виде строки."""
         try:
+            if structured:
+                system_message = "Respond only with valid JSON with no explanations or additional text."
+                messages = [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
+                ]
+            else:
+                messages = [{"role": "user", "content": prompt}]
+                
             response = openai.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1 if structured else 0.7
+                messages=messages,
+                temperature=0.1 if structured else 0.7,
+                response_format={"type": "json_object"} if structured else None
             )
-            return response.choices[0].message.content
+            
+            content = response.choices[0].message.content
+            
+            # Проверяем, что для structured запросов получен валидный JSON
+            if structured:
+                try:
+                    # Проверка валидности JSON
+                    json.loads(content)
+                except json.JSONDecodeError:
+                    logger.warning(f"OpenAI вернул невалидный JSON: {content}")
+                    # Оборачиваем простой ответ в JSON если это просто строка без кавычек
+                    if '"' not in content and '{' not in content and '[' not in content:
+                        return json.dumps({"intent": content.strip()})
+                    
+            return content
         except Exception as e:
             logger.error(f"Ошибка при вызове OpenAI API: {e}")
             raise
@@ -159,12 +183,3 @@ def generate_script(user_prompt: str) -> dict:
 
 def answer_question(user_prompt: str) -> str:
     return call_llm(user_prompt)
-
-
-# Функция detect_buffer_type перемещена в модуль recognizer.py
-
-
-# Функция run_buffer_program перемещена и переименована в get_buffer_info в модуле recognizer.py
-
-
-# Функция extract_buffer_parameters перемещена в модуль recognizer.py
