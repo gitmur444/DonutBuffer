@@ -56,6 +56,15 @@ add_executable(DonutBufferApp
     src/experiments/mutex_vs_lockfree_experiment.h
 )
 
+# Simple CLI runner for ring buffer benchmarks
+add_executable(buffer_runner
+    src/buffer_runner.cpp
+    src/ringbuffer/mutex_ring_buffer.cpp
+    src/ringbuffer/lockfree_ring_buffer.cpp
+)
+target_link_libraries(buffer_runner PRIVATE Threads::Threads)
+target_include_directories(buffer_runner PUBLIC src/)
+
 
 target_link_libraries(DonutBufferApp
     PRIVATE
