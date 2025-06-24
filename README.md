@@ -55,3 +55,31 @@ Or, if you are in the project's root directory:
 - Start/stop the simulation using the buttons.
 - View real-time buffer usage and speed metrics.
 - See the performance history graph.
+
+## Multi-Provider Command Interface
+
+The repository includes a simple command-line tool located in the `mcp` folder.
+It can work with either a local Ollama model or the OpenAI API. Below are common
+usage patterns.
+
+### Использование OpenAI (ключ в командной строке)
+```bash
+python -m mcp --provider openai --openai-key YOUR_API_KEY "ваш запрос" --full-response
+```
+
+### Использование OpenAI (ключ из переменной окружения)
+```bash
+export OPENAI_API_KEY=YOUR_API_KEY
+python -m mcp --provider openai "ваш запрос" --full-response
+```
+
+### Использование Ollama (по умолчанию)
+```bash
+python -m mcp "ваш запрос" --full-response
+```
+
+### Выбор конкретной модели
+```bash
+python -m mcp --provider openai --model gpt-4 "ваш запрос" --full-response
+python -m mcp --provider ollama --model codellama "ваш запрос" --full-response
+```
