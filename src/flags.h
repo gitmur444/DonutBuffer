@@ -5,11 +5,10 @@
 
 struct AppFlags {
     bool nogui = true;
-    std::string type = "mutex";
-    int producers = 1;
-    int consumers = 1;
-    Args args;
+    bool mutex_vs_lockfree = false;
+    bool concurrent_vs_lockfree = false;
     RingBufferConfig buffer_config;
+    Args args;
 };
 
 AppFlags parse_flags(int argc, char** argv);

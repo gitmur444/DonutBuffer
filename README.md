@@ -93,8 +93,8 @@ python -m mcp --provider ollama --model codellama "ваш запрос" --full-r
 - `--buffer-type {lockfree, mutex, concurrent_queue}` &mdash; тип используемого буфера.
 - `--producers N` &mdash; количество потоков-производителей.
 - `--consumers N` &mdash; количество потоков-потребителей.
-- `--buffer-size N` &mdash; размер буфера в мегабайтах.
-- `--total-transfer N` &mdash; общий объём передачи данных в мегабайтах.
+- `--buffer-size_mb N` &mdash; размер буфера в мегабайтах.
+- `--total-transfer_mb N` &mdash; общий объём передаваемых данных через ринг-буфер в мегабайтах.
 
 ### Python точка входа (`python -m mcp`)
 - `text` &mdash; обязательный текст команды пользователя.
