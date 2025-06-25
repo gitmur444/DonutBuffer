@@ -83,3 +83,28 @@ python -m mcp "ваш запрос" --full-response
 python -m mcp --provider openai --model gpt-4 "ваш запрос" --full-response
 python -m mcp --provider ollama --model codellama "ваш запрос" --full-response
 ```
+
+## Опции командной строки
+
+### С++ точка входа (`DonutBufferApp`)
+- `--nogui` &mdash; запуск без графического интерфейса. По умолчанию значение `true`.
+- `--mutex-vs-lockfree` &mdash; выполнить тест сравнения `MutexRingBuffer` и `LockFreeRingBuffer` и выйти.
+- `--concurrent-vs-lockfree` &mdash; выполнить тест `ConcurrentQueue` против `LockFreeRingBuffer` и выйти.
+- `--buffer-type {lockfree, mutex, concurrent_queue}` &mdash; тип используемого буфера.
+- `--producers N` &mdash; количество потоков-производителей.
+- `--consumers N` &mdash; количество потоков-потребителей.
+- `--buffer-size N` &mdash; размер буфера в мегабайтах.
+- `--total-transfer N` &mdash; общий объём передачи данных в мегабайтах.
+
+### Python точка входа (`python -m mcp`)
+- `text` &mdash; обязательный текст команды пользователя.
+- `--full-response` &mdash; выводить полную информацию вместо только намерения.
+- `--provider {ollama, openai}` &mdash; LLM-провайдер (по умолчанию переменная `LLM_PROVIDER` или `ollama`).
+- `--openai-key KEY` &mdash; API-ключ OpenAI (по умолчанию переменная `OPENAI_API_KEY`).
+- `--model MODEL` &mdash; модель для выбранного провайдера (по умолчанию из `OLLAMA_MODEL` или `OPENAI_MODEL`).
+
+### Переменные окружения
+- `LLM_PROVIDER` &mdash; провайдер LLM по умолчанию (`ollama` если не задано).
+- `OPENAI_API_KEY` &mdash; ключ API для OpenAI.
+- `OPENAI_MODEL` &mdash; модель для OpenAI (`gpt-3.5-turbo` по умолчанию).
+- `OLLAMA_MODEL` &mdash; модель для Ollama (`llama3` по умолчанию).
