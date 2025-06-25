@@ -1,16 +1,12 @@
-#include "application.h" // Assuming Application class is defined here
-#include "gui/gui.h"       // Assuming GUI related functions/classes are here
-#include "flags.h"         // Assuming AppFlags and parse_flags are defined here
-#include "experiments/experiment_base.h" // Assuming ExperimentBase is here
+#include "flags.h"         // Command line flag parsing
+#include "experiments/mutex_vs_lockfree_experiment.h"
+#include "experiments/concurrent_vs_lockfree_experiment.h"
 
 #include "ringbuffer/lockfree_ring_buffer_adapter.h"
 #include "ringbuffer/mutex_ring_buffer_adapter.h"
 #include "ringbuffer/abstract_ring_buffer.h"
 
-#include "imgui.h" // For ImVec4, ImGui::GetDrawData. This is a C library, so it remains an include.
-#include <iostream> // For std::cerr in case of critical app init failure
-#include <filesystem>
-#include <cstdlib>
+#include <iostream>
 #include <memory>
 #include <atomic>
 #include <thread>
@@ -80,39 +76,33 @@ void run_benchmark(AbstractRingBuffer* buffer, int producers, int consumers,
 
 int main(int argc, char** argv) {
     AppFlags flags = parse_flags(argc, argv);
-    // Run experiment if requested, then exit
-    /*
-    if (ExperimentBase::try_run_experiment(flags.args)) {
+
+    if (flags.mutex_vs_lockfree) {
+        MutexVsLockfreeExperiment().run();
         return 0;
     }
 
-    if (flags.nogui) {
-        std::cout << "Running in --nogui mode (no GUI, no simulation logic implemented yet)" << std::endl;
-        // Здесь можно добавить headless-режим или тесты без GUI
+    if (flags.concurrent_vs_lockfree) {
+        ConcurrentVsLockfreeExperiment().run();
         return 0;
     }
-    Application app;
-    if (!app.initialize(1280, 720, "Ring Buffer GUI - Refactored")) {
-        std::cerr << "FATAL: Application initialization failed. Check log for details." << std::endl;
-        return -1;
-    }
-    app.run_main_loop();
-    app.shutdown();
-    */
 
-    const int num_items = 100000;
-    const size_t buffer_size = 8;
+    const size_t buffer_capacity =
+        static_cast<size_t>(flags.buffer_config.buffer_size_mb) * 1024 * 1024 / sizeof(int);
+    const int num_items = static_cast<int>(
+        flags.buffer_config.total_transfer_mb * 1024 * 1024ULL / sizeof(int));
 
-    auto buffer = create_buffer(flags.type, buffer_size);
+    auto buffer = create_buffer(flags.buffer_config.buffer_type, buffer_capacity);
     if (!buffer) {
-        std::cerr << "Unknown buffer type: " << flags.type << std::endl;
+        std::cerr << "Unknown buffer type: " << flags.buffer_config.buffer_type << std::endl;
         return 1;
     }
 
-    std::cout << "Running " << flags.type << " with P=" << flags.producers
-              << " C=" << flags.consumers << std::endl;
+    std::cout << "Running " << flags.buffer_config.buffer_type
+              << " with P=" << flags.buffer_config.producer_count
+              << " C=" << flags.buffer_config.consumer_count << std::endl;
 
-    run_benchmark(buffer.get(), flags.producers, flags.consumers, num_items);
-
+    run_benchmark(buffer.get(), flags.buffer_config.producer_count,
+                  flags.buffer_config.consumer_count, num_items);
     return 0;
 }
