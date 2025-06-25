@@ -9,6 +9,7 @@
 #include "ringbuffer/lockfree_ring_buffer_adapter.h"
 #include "ringbuffer/mutex_ring_buffer_adapter.h"
 #include "ringbuffer/abstract_ring_buffer.h"
+#include "flags.h"
 
 namespace {
 std::unique_ptr<AbstractRingBuffer> create_buffer(const std::string& type, size_t capacity) {
@@ -62,22 +63,12 @@ void run_benchmark(AbstractRingBuffer* buffer, int producers, int consumers, int
 } // namespace
 
 int main(int argc, char** argv) {
-    std::string type = "mutex";
-    int producers = 1;
-    int consumers = 1;
+    AppFlags flags = parse_flags(argc, argv);
+    std::string type = flags.type;
+    int producers = flags.producers;
+    int consumers = flags.consumers;
     const int num_items = 100000; // default number of items
     const size_t buffer_size = 8;
-
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg.rfind("--type=", 0) == 0) {
-            type = arg.substr(7);
-        } else if (arg.rfind("--producers=", 0) == 0) {
-            producers = std::stoi(arg.substr(12));
-        } else if (arg.rfind("--consumers=", 0) == 0) {
-            consumers = std::stoi(arg.substr(12));
-        }
-    }
 
     auto buffer = create_buffer(type, buffer_size);
     if (!buffer) {
