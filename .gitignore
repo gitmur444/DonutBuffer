@@ -22,3 +22,6 @@ build/
 codebase/ring_buffer
 mcp/__pycache__/
 *.app
+
+# Python virtual environments
+venv_py312/
