@@ -1,100 +1,21 @@
 import json
 import logging
 import os
-from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Optional
 
-import requests
-import openai
+# Импортируем классы провайдеров из нового пакета
+from .providers import LLMProvider, OllamaProvider, OpenAIProvider
 
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger('llm')
 
-
-class LLMProvider(ABC):
-    """Абстрактный базовый класс для всех провайдеров LLM."""
-    
-    @abstractmethod
-    def call_model(self, prompt: str, structured: bool = False) -> str:
-        """Вызвать LLM модель с заданным промптом."""
-        pass
-
-
-class OllamaProvider(LLMProvider):
-    """Провайдер для локальной модели Ollama."""
-    
-    def __init__(self, model: str = "llama3"):
-        self.model = model
-        self.api_url = "http://localhost:11434/api/generate"
-    
-    def call_model(self, prompt: str, structured: bool = False) -> str:
-        """Вызвать Ollama LLM и вернуть ответ в виде строки."""
-        payload = {"model": self.model, "prompt": prompt, "stream": False}
-        if structured:
-            payload["format"] = "json"
-        
-        try:
-            resp = requests.post(self.api_url, json=payload, timeout=60)
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("response", "")
-        except Exception as e:
-            logger.error(f"Ошибка при вызове Ollama API: {e}")
-            raise
-
-
-class OpenAIProvider(LLMProvider):
-    """Провайдер для OpenAI API."""
-    
-    def __init__(self, model: str = "gpt-3.5-turbo"):
-        self.model = model
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is not set")
-        
-        openai.api_key = api_key
-    
-    def call_model(self, prompt: str, structured: bool = False) -> str:
-        """Вызвать OpenAI API и вернуть ответ в виде строки."""
-        try:
-            if structured:
-                system_message = "Respond only with valid JSON with no explanations or additional text."
-                messages = [
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": prompt}
-                ]
-            else:
-                messages = [{"role": "user", "content": prompt}]
-                
-            response = openai.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.1 if structured else 0.7,
-                response_format={"type": "json_object"} if structured else None
-            )
-            
-            content = response.choices[0].message.content
-            
-            # Проверяем, что для structured запросов получен валидный JSON
-            if structured:
-                try:
-                    # Проверка валидности JSON
-                    json.loads(content)
-                except json.JSONDecodeError:
-                    logger.warning(f"OpenAI вернул невалидный JSON: {content}")
-                    # Оборачиваем простой ответ в JSON если это просто строка без кавычек
-                    if '"' not in content and '{' not in content and '[' not in content:
-                        return json.dumps({"intent": content.strip()})
-                    
-            return content
-        except Exception as e:
-            logger.error(f"Ошибка при вызове OpenAI API: {e}")
-            raise
+# Отключение логов httpx (используется OpenAI API)
+logging.getLogger('httpx').setLevel(logging.WARNING)
 
 
 # Глобальный провайдер
@@ -133,16 +54,14 @@ def call_llm(prompt: str, *, structured: bool = False) -> str:
         init_provider()
     
     # Логируем запрос к LLM
-    truncated_prompt = prompt[:100] + '...' if len(prompt) > 100 else prompt
-    logger.info(f"LLM запрос: {truncated_prompt}")
+    logger.info(f"DonutBuffer >> LLM: {prompt}")
     logger.debug(f"Полный запрос к LLM: {prompt}")
     
     # Вызываем провайдера
     response = current_provider.call_model(prompt, structured)
     
     # Логируем ответ от LLM
-    truncated_response = response[:100] + '...' if len(response) > 100 else response
-    logger.info(f"LLM ответ: {truncated_response}")
+    logger.info(f"LLM >> DonutBuffer: {response}")
     logger.debug(f"Полный ответ LLM: {response}")
     
     return response
