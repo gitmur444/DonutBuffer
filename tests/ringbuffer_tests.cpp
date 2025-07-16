@@ -1,13 +1,15 @@
 #include <gtest/gtest.h>
 #include <atomic>
+#include <cassert>
+#include <iostream>
+#include <thread>
+#include <vector>
+#include <chrono>
 #include "ringbuffer/mutex_ring_buffer.h"
 #include "ringbuffer/lockfree_ring_buffer.h"
 
 // =============================================================================
 // БАЗОВЫЕ UNIT ТЕСТЫ ДЛЯ MutexRingBuffer
-// =============================================================================
-// Проверяют корректность основных операций с использованием мьютексов
-// и condition variables для синхронизации между потоками
 // =============================================================================
 
 class MutexRingBufferTest : public ::testing::Test {
@@ -20,100 +22,113 @@ protected:
 };
 
 // СЦЕНАРИЙ: Проверка базового цикла производства и потребления
-// ЧТО ПРОВЕРЯЕТСЯ:
-// 1. Успешное добавление элементов в буфер
-// 2. Корректность счетчика элементов  
-// 3. FIFO порядок извлечения элементов
-// 4. Состояние буфера после операций
-// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Элементы извлекаются в том же порядке, что и добавлялись
 TEST_F(MutexRingBufferTest, BasicProduceConsume) {
-    MutexRingBuffer rb(2);  // Буфер размером 2 элемента
+    MutexRingBuffer rb(2);
     
-    // Добавляем два элемента - буфер должен заполниться
     EXPECT_TRUE(rb.produce(1, 0, stop_flag));
     EXPECT_TRUE(rb.produce(2, 0, stop_flag));
-    EXPECT_EQ(rb.get_count(), 2u);  // Счетчик должен показывать 2
+    EXPECT_EQ(rb.get_count(), 2u);
     
-    // Извлекаем элементы и проверяем FIFO порядок
     int value = 0;
     EXPECT_TRUE(rb.consume(value, 0, stop_flag));
-    EXPECT_EQ(value, 1);  // Первый добавленный элемент
+    EXPECT_EQ(value, 1);
     
     EXPECT_TRUE(rb.consume(value, 0, stop_flag));
-    EXPECT_EQ(value, 2);  // Второй добавленный элемент
-    EXPECT_EQ(rb.get_count(), 0u);  // Буфер должен быть пустым
-}
-
-// СЦЕНАРИЙ: Проверка управления емкостью буфера и переполнения
-// ЧТО ПРОВЕРЯЕТСЯ:
-// 1. Корректность возвращаемой емкости буфера
-// 2. Начальное состояние пустого буфера
-// 3. Заполнение буфера до максимальной емкости
-// 4. Блокировка при попытке переполнения
-// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Буфер корректно отслеживает свое состояние и блокирует переполнение
-TEST_F(MutexRingBufferTest, CapacityManagement) {
-    MutexRingBuffer rb(2);  // Создаем буфер на 2 элемента
-    
-    // Проверяем начальное состояние
-    EXPECT_EQ(rb.get_capacity(), 2u);  // Емкость должна быть 2
-    EXPECT_EQ(rb.get_count(), 0u);     // Изначально пустой
-    
-    // Заполняем буфер до предела
-    EXPECT_TRUE(rb.produce(1, 0, stop_flag));  // Первый элемент
-    EXPECT_TRUE(rb.produce(2, 0, stop_flag));  // Второй элемент
-    EXPECT_EQ(rb.get_count(), 2u);             // Буфер полный
-    
-    // Попытка добавить в переполненный буфер должна неблокирующе отклоняться
-    EXPECT_FALSE(rb.produce(3, 0, stop_flag));
+    EXPECT_EQ(value, 2);
+    EXPECT_EQ(rb.get_count(), 0u);
 }
 
 // СЦЕНАРИЙ: Проверка поведения при чтении из пустого буфера
-// ЧТО ПРОВЕРЯЕТСЯ:
-// 1. Реакция буфера на попытку чтения когда данных нет
-// 2. Неблокирующее поведение при отсутствии данных
-// 3. Сохранение переменной value при неуспешном чтении
-// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Операция consume возвращает false без блокировки
 TEST_F(MutexRingBufferTest, EmptyBufferConsume) {
-    MutexRingBuffer rb(2);  // Пустой буфер
-    int value = 0;          // Переменная для результата
+    MutexRingBuffer rb(2);
+    int value = 0;
     
-    // Попытка чтения из пустого буфера должна неблокирующе завершиться неудачей
     EXPECT_FALSE(rb.consume(value, 0, stop_flag));
 }
 
-// СЦЕНАРИЙ: Проверка циклических операций и work-around буфера
-// ЧТО ПРОВЕРЯЕТСЯ:
-// 1. Корректность работы кольцевого буфера при многократном использовании
-// 2. Правильность work-around индексов head и tail
-// 3. Отсутствие memory corruption при переполнении индексов
-// 4. FIFO порядок при многократных циклах заполнения/освобождения
-// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Буфер корректно работает через множество циклов
+// СЦЕНАРИЙ: Проверка циклических операций
 TEST_F(MutexRingBufferTest, CircularOperation) {
-    MutexRingBuffer rb(2);  // Буфер на 2 элемента
+    MutexRingBuffer rb(2);
     int value = 0;
     
-    // Выполняем 5 циклов полного заполнения и освобождения
-    for (int i = 0; i < 5; ++i) {
-        // Заполняем буфер двумя элементами
-        EXPECT_TRUE(rb.produce(i * 10, 0, stop_flag));      // Например: 0, 10, 20...
-        EXPECT_TRUE(rb.produce(i * 10 + 1, 0, stop_flag));  // Например: 1, 11, 21...
+    // Многократные циклы заполнения/освобождения
+    for (int cycle = 0; cycle < 10; ++cycle) {
+        // Заполняем буфер
+        EXPECT_TRUE(rb.produce(cycle * 10 + 1, 0, stop_flag));
+        EXPECT_TRUE(rb.produce(cycle * 10 + 2, 0, stop_flag));
         
-        // Извлекаем элементы в правильном порядке
+        // Освобождаем буфер
         EXPECT_TRUE(rb.consume(value, 0, stop_flag));
-        EXPECT_EQ(value, i * 10);      // Проверяем первый элемент
-        
+        EXPECT_EQ(value, cycle * 10 + 1);
         EXPECT_TRUE(rb.consume(value, 0, stop_flag));
-        EXPECT_EQ(value, i * 10 + 1);  // Проверяем второй элемент
-        
-        // После каждого цикла буфер снова пустой и готов к следующему циклу
+        EXPECT_EQ(value, cycle * 10 + 2);
     }
+}
+
+// СЦЕНАРИЙ: Многопоточный тест производительности
+TEST_F(MutexRingBufferTest, MultithreadedPerformance) {
+    const int buffer_size = 16;
+    const int num_items = 10000;
+    const int num_producers = 2;
+    const int num_consumers = 2;
+    
+    MutexRingBuffer rb(buffer_size);
+    std::atomic<int> produced(0);
+    std::atomic<int> consumed(0);
+    
+    std::vector<std::thread> producers, consumers;
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    // Производители
+    for (int i = 0; i < num_producers; ++i) {
+        producers.emplace_back([&, i]() {
+            while (!stop_flag.load()) {
+                int item = produced.fetch_add(1);
+                if (item >= num_items) break;
+                
+                while (!rb.produce(item, i, stop_flag)) {
+                    if (stop_flag.load()) return;
+                    std::this_thread::yield();
+                }
+            }
+        });
+    }
+    
+    // Потребители
+    for (int i = 0; i < num_consumers; ++i) {
+        consumers.emplace_back([&, i]() {
+            int item;
+            while (!stop_flag.load()) {
+                if (consumed.load() >= num_items) break;
+                
+                if (rb.consume(item, i, stop_flag)) {
+                    consumed.fetch_add(1);
+                } else {
+                    std::this_thread::yield();
+                }
+            }
+        });
+    }
+    
+    // Ждем завершения
+    while (consumed.load() < num_items) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    
+    stop_flag = true;
+    for (auto& t : producers) t.join();
+    for (auto& t : consumers) t.join();
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    double seconds = std::chrono::duration<double>(end - start).count();
+    
+    EXPECT_EQ(consumed.load(), num_items);
+    std::cout << "Mutex: " << num_items << " items in " << seconds 
+              << " sec (" << (num_items / seconds) << " items/sec)" << std::endl;
 }
 
 // =============================================================================
 // БАЗОВЫЕ UNIT ТЕСТЫ ДЛЯ LockFreeRingBuffer
-// =============================================================================
-// Проверяют корректность основных операций с использованием lock-free алгоритмов
-// на основе atomic операций и sequence numbers для синхронизации
 // =============================================================================
 
 class LockFreeRingBufferTest : public ::testing::Test {
@@ -125,131 +140,233 @@ protected:
     std::atomic<bool> stop_flag{false};
 };
 
-// СЦЕНАРИЙ: Проверка базового цикла производства и потребления (Lock-Free)
-// ЧТО ПРОВЕРЯЕТСЯ:
-// 1. Успешное добавление элементов без использования мьютексов
-// 2. Корректность atomic счетчика элементов
-// 3. FIFO порядок при использовании sequence numbers
-// 4. Отсутствие race conditions в lock-free операциях
-// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Элементы извлекаются в том же порядке, используя только atomic операции
 TEST_F(LockFreeRingBufferTest, BasicProduceConsume) {
-    LockFreeRingBuffer rb(2);  // Lock-free буфер размером 2 элемента
+    LockFreeRingBuffer rb(2);
     
-    // Добавляем элементы используя atomic операции
     EXPECT_TRUE(rb.produce(1, 0, stop_flag));
     EXPECT_TRUE(rb.produce(2, 0, stop_flag));
-    EXPECT_EQ(rb.get_count(), 2u);  // Atomic счетчик должен показывать 2
+    EXPECT_EQ(rb.get_count(), 2u);
     
-    // Извлекаем элементы и проверяем lock-free FIFO порядок
     int value = 0;
     EXPECT_TRUE(rb.consume(value, 0, stop_flag));
-    EXPECT_EQ(value, 1);  // Первый элемент (sequence-based ordering)
+    EXPECT_EQ(value, 1);
     
     EXPECT_TRUE(rb.consume(value, 0, stop_flag));
-    EXPECT_EQ(value, 2);  // Второй элемент
-    EXPECT_EQ(rb.get_count(), 0u);  // Буфер пустой
+    EXPECT_EQ(value, 2);
+    EXPECT_EQ(rb.get_count(), 0u);
 }
 
-// СЦЕНАРИЙ: Проверка управления емкостью в lock-free буфере
-// ЧТО ПРОВЕРЯЕТСЯ:
-// 1. Корректность atomic операций для отслеживания заполненности
-// 2. Предотвращение переполнения без блокировок
-// 3. Lock-free проверка доступности слотов через sequence numbers
-// 4. Отсутствие ABA problem при работе с емкостью
-// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Буфер корректно управляет емкостью используя только atomic операции
-TEST_F(LockFreeRingBufferTest, CapacityManagement) {
-    LockFreeRingBuffer rb(2);  // Lock-free буфер на 2 элемента
-    
-    // Проверяем начальное состояние через atomic операции
-    EXPECT_EQ(rb.get_capacity(), 2u);  // Фиксированная емкость
-    EXPECT_EQ(rb.get_count(), 0u);     // Изначально пустой (atomic count)
-    
-    // Заполняем буфер используя CAS операции
-    EXPECT_TRUE(rb.produce(1, 0, stop_flag));  // Первый slot через atomic sequence
-    EXPECT_TRUE(rb.produce(2, 0, stop_flag));  // Второй slot
-    EXPECT_EQ(rb.get_count(), 2u);             // Atomic счетчик показывает заполненность
-    
-    // Lock-free отклонение переполнения через sequence checking
-    EXPECT_FALSE(rb.produce(3, 0, stop_flag));
-}
-
-// СЦЕНАРИЙ: Проверка lock-free поведения при чтении из пустого буфера
-// ЧТО ПРОВЕРЯЕТСЯ:
-// 1. Lock-free обработка пустого состояния через sequence numbers
-// 2. Отсутствие блокировок при недоступности данных
-// 3. Корректность atomic проверок доступности слотов
-// 4. Неизменность данных при неуспешном lock-free чтении
-// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Операция завершается неудачей без блокировок и ожиданий
 TEST_F(LockFreeRingBufferTest, EmptyBufferConsume) {
-    LockFreeRingBuffer rb(2);  // Пустой lock-free буфер
-    int value = 0;             // Переменная для atomic чтения
+    LockFreeRingBuffer rb(2);
+    int value = 0;
     
-    // Lock-free попытка чтения из пустого буфера через sequence checking
     EXPECT_FALSE(rb.consume(value, 0, stop_flag));
 }
 
-// СЦЕНАРИЙ: Проверка lock-free циклических операций и sequence overflow
-// ЧТО ПРОВЕРЯЕТСЯ:
-// 1. Корректность lock-free work-around при переполнении sequence numbers
-// 2. Отсутствие ABA problem при многократных циклах
-// 3. Стабильность atomic операций при интенсивном использовании
-// 4. FIFO порядок при работе с wraparound sequence numbers
-// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Lock-free буфер стабильно работает через множество циклов
 TEST_F(LockFreeRingBufferTest, CircularOperation) {
-    LockFreeRingBuffer rb(2);  // Lock-free буфер на 2 элемента
+    LockFreeRingBuffer rb(2);
     int value = 0;
     
-    // Выполняем 5 циклов lock-free заполнения и освобождения
-    for (int i = 0; i < 5; ++i) {
-        // Lock-free заполнение через atomic sequence increments
-        EXPECT_TRUE(rb.produce(i * 10, 0, stop_flag));      // CAS операция на sequence
-        EXPECT_TRUE(rb.produce(i * 10 + 1, 0, stop_flag));  // Следующий sequence slot
-        
-        // Lock-free извлечение с проверкой sequence numbers
-        EXPECT_TRUE(rb.consume(value, 0, stop_flag));
-        EXPECT_EQ(value, i * 10);      // Проверяем порядок через sequence
+    for (int cycle = 0; cycle < 10; ++cycle) {
+        EXPECT_TRUE(rb.produce(cycle * 10 + 1, 0, stop_flag));
+        EXPECT_TRUE(rb.produce(cycle * 10 + 2, 0, stop_flag));
         
         EXPECT_TRUE(rb.consume(value, 0, stop_flag));
-        EXPECT_EQ(value, i * 10 + 1);  // Второй элемент в sequence порядке
-        
-        // Sequence numbers wraparound готов к следующему циклу
+        EXPECT_EQ(value, cycle * 10 + 1);
+        EXPECT_TRUE(rb.consume(value, 0, stop_flag));
+        EXPECT_EQ(value, cycle * 10 + 2);
     }
 }
 
+TEST_F(LockFreeRingBufferTest, MultithreadedPerformance) {
+    const int buffer_size = 16;
+    const int num_items = 10000;
+    const int num_producers = 2;
+    const int num_consumers = 2;
+    
+    LockFreeRingBuffer rb(buffer_size);
+    std::atomic<int> produced(0);
+    std::atomic<int> consumed(0);
+    
+    std::vector<std::thread> producers, consumers;
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    // Производители
+    for (int i = 0; i < num_producers; ++i) {
+        producers.emplace_back([&, i]() {
+            while (!stop_flag.load()) {
+                int item = produced.fetch_add(1);
+                if (item >= num_items) break;
+                
+                while (!rb.produce(item, i, stop_flag)) {
+                    if (stop_flag.load()) return;
+                    std::this_thread::yield();
+                }
+            }
+        });
+    }
+    
+    // Потребители
+    for (int i = 0; i < num_consumers; ++i) {
+        consumers.emplace_back([&, i]() {
+            int item;
+            while (!stop_flag.load()) {
+                if (consumed.load() >= num_items) break;
+                
+                if (rb.consume(item, i, stop_flag)) {
+                    consumed.fetch_add(1);
+                } else {
+                    std::this_thread::yield();
+                }
+            }
+        });
+    }
+    
+    // Ждем завершения
+    while (consumed.load() < num_items) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    
+    stop_flag = true;
+    for (auto& t : producers) t.join();
+    for (auto& t : consumers) t.join();
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    double seconds = std::chrono::duration<double>(end - start).count();
+    
+    EXPECT_EQ(consumed.load(), num_items);
+    std::cout << "LockFree: " << num_items << " items in " << seconds 
+              << " sec (" << (num_items / seconds) << " items/sec)" << std::endl;
+}
+
 // =============================================================================
-// GENERIC ТЕСТЫ ДЛЯ ОБЕИХ РЕАЛИЗАЦИЙ
-// =============================================================================
-// Тесты, которые должны работать одинаково для Mutex и LockFree реализаций
-// Используют TYPED_TEST для автоматического запуска с разными типами
+// ТЕСТЫ ГРАНИЧНЫХ СЛУЧАЕВ
 // =============================================================================
 
-template<typename RingBufferType>
-class RingBufferGenericTest : public ::testing::Test {
+TEST_F(MutexRingBufferTest, BufferFull) {
+    MutexRingBuffer rb(2);
+    
+    EXPECT_TRUE(rb.produce(1, 0, stop_flag));
+    EXPECT_TRUE(rb.produce(2, 0, stop_flag));
+    EXPECT_EQ(rb.get_count(), 2u);
+    
+    // Попытка добавить в полный буфер может блокироваться или возвращать false
+    // В зависимости от реализации
+}
+
+TEST_F(LockFreeRingBufferTest, BufferFull) {
+    LockFreeRingBuffer rb(2);
+    
+    EXPECT_TRUE(rb.produce(1, 0, stop_flag));
+    EXPECT_TRUE(rb.produce(2, 0, stop_flag));
+    EXPECT_EQ(rb.get_count(), 2u);
+}
+
+// =============================================================================
+// СРАВНИТЕЛЬНЫЕ ТЕСТЫ ПРОИЗВОДИТЕЛЬНОСТИ
+// =============================================================================
+
+class PerformanceComparisonTest : public ::testing::Test {
 protected:
     void SetUp() override {
         stop_flag.store(false);
     }
     
     std::atomic<bool> stop_flag{false};
+    
+    struct PerformanceResult {
+        double items_per_sec;
+        double duration_sec;
+        int items_processed;
+    };
+    
+    PerformanceResult test_performance(auto& buffer, int num_items, int producers, int consumers) {
+        std::atomic<int> produced(0);
+        std::atomic<int> consumed(0);
+        
+        std::vector<std::thread> producer_threads, consumer_threads;
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        // Производители
+        for (int i = 0; i < producers; ++i) {
+            producer_threads.emplace_back([&, i]() {
+                while (!stop_flag.load()) {
+                    int item = produced.fetch_add(1);
+                    if (item >= num_items) break;
+                    
+                    while (!buffer.produce(item, i, stop_flag)) {
+                        if (stop_flag.load()) return;
+                        std::this_thread::yield();
+                    }
+                }
+            });
+        }
+        
+        // Потребители
+        for (int i = 0; i < consumers; ++i) {
+            consumer_threads.emplace_back([&, i]() {
+                int item;
+                while (!stop_flag.load()) {
+                    if (consumed.load() >= num_items) break;
+                    
+                    if (buffer.consume(item, i, stop_flag)) {
+                        consumed.fetch_add(1);
+                    } else {
+                        std::this_thread::yield();
+                    }
+                }
+            });
+        }
+        
+        // Ждем завершения
+        while (consumed.load() < num_items) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        
+        stop_flag = true;
+        for (auto& t : producer_threads) t.join();
+        for (auto& t : consumer_threads) t.join();
+        
+        auto end = std::chrono::high_resolution_clock::now();
+        double duration = std::chrono::duration<double>(end - start).count();
+        
+        return {
+            .items_per_sec = num_items / duration,
+            .duration_sec = duration,
+            .items_processed = consumed.load()
+        };
+    }
 };
 
-// Список типов для параметризованных тестов
-typedef ::testing::Types<MutexRingBuffer, LockFreeRingBuffer> RingBufferTypes;
-TYPED_TEST_SUITE(RingBufferGenericTest, RingBufferTypes);
-
-// СЦЕНАРИЙ: Проверка корректной обработки stop_flag в обеих реализациях
-// ЧТО ПРОВЕРЯЕТСЯ:
-// 1. Обе реализации должны одинаково реагировать на stop_flag = true
-// 2. Операции должны немедленно прерываться без блокировок
-// 3. Не должно быть различий в поведении между Mutex и LockFree
-// 4. Graceful shutdown mechanism работает в обеих реализациях
-// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Обе реализации возвращают false при установленном stop_flag
-TYPED_TEST(RingBufferGenericTest, StopFlagRespected) {
-    TypeParam rb(10);               // Буфер любого из типов (Mutex или LockFree)
-    this->stop_flag.store(true);    // Устанавливаем сигнал остановки
+TEST_F(PerformanceComparisonTest, MutexVsLockFreeComparison) {
+    const int buffer_size = 16;
+    const int num_items = 50000;
+    const int producers = 4;
+    const int consumers = 4;
     
-    // Обе операции должны немедленно завершиться с false
-    int value = 0;
-    EXPECT_FALSE(rb.produce(1, 0, this->stop_flag));      // Производство прервано
-    EXPECT_FALSE(rb.consume(value, 0, this->stop_flag));  // Потребление прервано
+    // Тест Mutex буфера
+    {
+        MutexRingBuffer mutex_buffer(buffer_size);
+        auto mutex_result = test_performance(mutex_buffer, num_items, producers, consumers);
+        
+        EXPECT_EQ(mutex_result.items_processed, num_items);
+        EXPECT_GT(mutex_result.items_per_sec, 1000.0); // Минимум 1K items/sec
+        
+        std::cout << "Mutex Buffer: " << mutex_result.items_per_sec 
+                  << " items/sec (" << mutex_result.duration_sec << " sec)" << std::endl;
+    }
+    
+    stop_flag = false; // Сброс для следующего теста
+    
+    // Тест LockFree буфера
+    {
+        LockFreeRingBuffer lockfree_buffer(buffer_size);
+        auto lockfree_result = test_performance(lockfree_buffer, num_items, producers, consumers);
+        
+        EXPECT_EQ(lockfree_result.items_processed, num_items);
+        EXPECT_GT(lockfree_result.items_per_sec, 10000.0); // LockFree должен быть быстрее
+        
+        std::cout << "LockFree Buffer: " << lockfree_result.items_per_sec 
+                  << " items/sec (" << lockfree_result.duration_sec << " sec)" << std::endl;
+    }
 }

@@ -98,15 +98,20 @@ else()
     message(STATUS "GUI components disabled - DonutBufferApp will not be built")
 endif()
 
-# Simple CLI runner for ring buffer benchmarks
-add_executable(buffer_runner
+
+# --- CLI-only BufferRunner --- 
+add_executable(BufferRunner
     src/buffer_runner.cpp
+    src/flags.cpp
     src/ringbuffer/mutex_ring_buffer.cpp
     src/ringbuffer/lockfree_ring_buffer.cpp
 )
-target_link_libraries(buffer_runner PRIVATE Threads::Threads)
-target_include_directories(buffer_runner PUBLIC src/)
 
+target_include_directories(BufferRunner PRIVATE
+    src/
+)
+
+target_link_libraries(BufferRunner PRIVATE Threads::Threads)
 add_subdirectory(tests)
 
 # For macOS, ensure the executable is bundled if needed
