@@ -7,7 +7,13 @@
 #include "ringbuffer/mutex_ring_buffer.h"
 #include "ringbuffer/lockfree_ring_buffer.h"
 
-// Concurrent tests for MutexRingBuffer
+// =============================================================================
+// МНОГОПОТОЧНЫЕ ТЕСТЫ ДЛЯ MutexRingBuffer
+// =============================================================================
+// Проверяют thread safety и корректность работы в многопоточной среде
+// с использованием мьютексов и condition variables
+// =============================================================================
+
 class MutexRingBufferConcurrentTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -15,21 +21,30 @@ protected:
     }
     
     void TearDown() override {
-        stop_flag.store(true);
+        stop_flag.store(true);  // Гарантируем остановку всех потоков
     }
     
     std::atomic<bool> stop_flag{false};
 };
 
+// СЦЕНАРИЙ: Single Producer Single Consumer (SPSC) с мьютексами
+// ЧТО ПРОВЕРЯЕТСЯ:
+// 1. Thread safety между одним производителем и одним потребителем
+// 2. Отсутствие race conditions в критических секциях
+// 3. Корректность работы condition variables при блокировках
+// 4. Сохранение FIFO порядка при многопоточном доступе
+// 5. Синхронизация завершения работы потоков
+// ОЖИДАЕМЫЙ РЕЗУЛЬТАТ: Все элементы переданы в правильном порядке без потерь
 TEST_F(MutexRingBufferConcurrentTest, SingleProducerSingleConsumer) {
-    const size_t buffer_size = 100;
-    const size_t num_items = 10000;
+    const size_t buffer_size = 100;   // Достаточно большой буфер для избежания частых блокировок
+    const size_t num_items = 10000;   // Значительный объем данных для stress testing
     MutexRingBuffer rb(buffer_size);
     
+    // Atomic счетчики для thread-safe мониторинга прогресса
     std::atomic<size_t> produced_count{0};
     std::atomic<size_t> consumed_count{0};
-    std::vector<int> consumed_values;
-    std::mutex consumed_mutex;
+    std::vector<int> consumed_values;  // Для проверки корректности данных
+    std::mutex consumed_mutex;         // Защита общего вектора
     
     // Producer thread
     std::thread producer([&]() {
