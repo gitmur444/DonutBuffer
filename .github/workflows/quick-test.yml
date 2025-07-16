@@ -1,0 +1,52 @@
+name: Quick Tests
+
+on:
+  push:
+    branches-ignore: [ master, main, develop ]
+  # Не запускаться для pull_request, чтобы избежать дублирования с ci.yml
+
+jobs:
+  quick-test:
+    name: Quick Build and Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Cache build dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          build
+        key: ${{ runner.os }}-build-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-build-
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libglfw3-dev
+
+    - name: Quick build and test
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Debug
+        make -j$(nproc) ringbuffer_tests
+        
+        echo "🔧 Running quick unit tests..."
+        if [ -f "./tests/ringbuffer_tests" ]; then
+          ./tests/ringbuffer_tests
+        else
+          echo "❌ Unit tests binary not found"
+          exit 1
+        fi
+
+    - name: Verify build artifacts
+      run: |
+        echo "📦 Checking build artifacts..."
+        ls -la build/
+        ls -la build/tests/ || echo "Tests directory not found"

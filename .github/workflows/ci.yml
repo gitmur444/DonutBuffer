@@ -1,0 +1,206 @@
+name: DonutBuffer CI Tests
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+
+jobs:
+  test:
+    name: Build and Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-20.04]
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-20.04  
+            cc: gcc-10
+            cxx: g++-10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          gcc-10 \
+          g++-10 \
+          libglfw3-dev \
+          libgl1-mesa-dev \
+          libglu1-mesa-dev \
+          libxrandr-dev \
+          libxinerama-dev \
+          libxcursor-dev \
+          libxi-dev \
+          pkg-config
+
+    - name: Set up environment
+      run: |
+        echo "CC=${{ matrix.cc }}" >> $GITHUB_ENV
+        echo "CXX=${{ matrix.cxx }}" >> $GITHUB_ENV
+
+    - name: Create build directory
+      run: mkdir -p build
+
+    - name: Configure CMake
+      run: |
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+    - name: Build project
+      run: |
+        cd build
+        make -j$(nproc)
+
+    - name: Run Unit Tests
+      run: |
+        echo "🔧 Running Unit Tests..."
+        if [ -f "./build/tests/ringbuffer_tests" ]; then
+          ./build/tests/ringbuffer_tests
+        else
+          echo "❌ Unit tests binary not found"
+          exit 1
+        fi
+
+    - name: Run E2E Tests  
+      run: |
+        echo "🌐 Running E2E Tests..."
+        if [ -f "./build/tests/e2e_buffer_tests" ] && [ -f "./build/BufferRunner" ]; then
+          ./build/tests/e2e_buffer_tests ./build/BufferRunner
+        else
+          echo "❌ E2E tests or BufferRunner binary not found"
+          exit 1
+        fi
+
+    - name: Run All Tests via CTest
+      run: |
+        echo "🚀 Running all tests via CTest..."
+        cd build
+        ctest --output-on-failure --verbose
+
+    - name: Quick CLI Performance Check
+      run: |
+        echo "⚡ Running quick CLI performance check..."
+        if [ -f "./build/BufferRunner" ]; then
+          echo "Testing mutex ring buffer (quick):"
+          timeout 30 ./build/BufferRunner || echo "Mutex test completed or timed out"
+          echo ""
+          echo "Testing lockfree ring buffer (quick):"  
+          timeout 30 ./build/BufferRunner --type=lockfree || echo "Lockfree test completed or timed out"
+        else
+          echo "❌ BufferRunner binary not found"
+          exit 1
+        fi
+
+  test-macos:
+    name: Build and Test on macOS
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies (macOS)
+      run: |
+        brew update
+        brew install cmake glfw
+
+    - name: Create build directory
+      run: mkdir -p build
+
+    - name: Configure CMake
+      run: |
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build project
+      run: |
+        cd build
+        make -j$(sysctl -n hw.ncpu)
+
+    - name: Run Unit Tests
+      run: |
+        echo "🔧 Running Unit Tests on macOS..."
+        if [ -f "./build/tests/ringbuffer_tests" ]; then
+          ./build/tests/ringbuffer_tests
+        else
+          echo "❌ Unit tests binary not found"
+          exit 1
+        fi
+
+    - name: Run E2E Tests
+      run: |
+        echo "🌐 Running E2E Tests on macOS..."
+        if [ -f "./build/tests/e2e_buffer_tests" ] && [ -f "./build/BufferRunner" ]; then
+          ./build/tests/e2e_buffer_tests ./build/BufferRunner
+        else
+          echo "❌ E2E tests or BufferRunner binary not found"
+          exit 1
+        fi
+
+    - name: Run All Tests via CTest
+      run: |
+        echo "🚀 Running all tests via CTest on macOS..."
+        cd build
+        ctest --output-on-failure --verbose
+
+  # Отдельный job для более длительных performance тестов
+  performance-tests:
+    name: Extended Performance Tests
+    runs-on: ubuntu-latest
+    needs: test  # Запускать только если основные тесты прошли
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libglfw3-dev
+
+    - name: Build project
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        make -j$(nproc)
+
+    - name: Extended CLI Performance Tests
+      run: |
+        echo "⚡ Running extended CLI performance tests..."
+        if [ -f "./build/BufferRunner" ]; then
+          echo "1. Mutex (1P+1C):"
+          timeout 60 ./build/BufferRunner || echo "Test completed"
+          echo ""
+          
+          echo "2. Lockfree (1P+1C):"
+          timeout 60 ./build/BufferRunner --type=lockfree || echo "Test completed"
+          echo ""
+          
+          echo "3. Lockfree multi-threaded (4P+2C):"
+          timeout 60 ./build/BufferRunner --type=lockfree --producers=4 --consumers=2 || echo "Test completed"
+          echo ""
+          
+          echo "4. Stress test (8P+8C):"
+          timeout 120 ./build/BufferRunner --type=lockfree --producers=8 --consumers=8 || echo "Test completed"
+        else
+          echo "❌ BufferRunner binary not found"
+          exit 1
+        fi
