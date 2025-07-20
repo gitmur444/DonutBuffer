@@ -61,35 +61,28 @@ class SmartGTestAgent:
         return result["response"]
 
 async def main():
-    """Interactive chat loop"""
+    """Single interaction with the agent"""
     print("🤖 Smart GTest Agent")
-    print("Type 'quit' to exit")
     
     if not os.getenv("OPENAI_API_KEY"):
         print("❌ Error: OPENAI_API_KEY not found")
         return
     
-    agent = SmartGTestAgent()
-    
-    while True:
-        try:
-            user_input = input("\n👤 You: ").strip()
+    try:
+        user_input = input("👤 Your question: ").strip()
+        
+        if not user_input:
+            print("❌ No input provided")
+            return
             
-            if user_input.lower() in ['quit', 'exit', 'q']:
-                print("👋 Goodbye!")
-                break
-                
-            if not user_input:
-                continue
-                
-            response = await agent.chat(user_input)
-            print(f"\n🤖 Agent: {response}")
-            
-        except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
-            break
-        except Exception as e:
-            print(f"❌ Error: {e}")
+        agent = SmartGTestAgent()
+        response = await agent.chat(user_input)
+        print(f"\n🤖 Agent: {response}")
+        
+    except KeyboardInterrupt:
+        print("\n👋 Cancelled")
+    except Exception as e:
+        print(f"❌ Error: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main()) 
