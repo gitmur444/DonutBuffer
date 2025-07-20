@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 #include <chrono>
+#include "smart_gtest/simple_smart_gtest.h"
 #include "ringbuffer/mutex_ring_buffer.h"
 #include "ringbuffer/lockfree_ring_buffer.h"
 
@@ -369,4 +370,14 @@ TEST_F(PerformanceComparisonTest, MutexVsLockFreeComparison) {
         std::cout << "LockFree Buffer: " << lockfree_result.items_per_sec 
                   << " items/sec (" << lockfree_result.duration_sec << " sec)" << std::endl;
     }
+}
+
+// Custom main для SmartGTest
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    
+    // Инициализация SmartGTest
+    SMART_GTEST_INIT();
+    
+    return RUN_ALL_TESTS();
 }

@@ -18,6 +18,26 @@ make clean
 ./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp [опции]
 ```
 
+## Smart GTest система
+
+В проекте доступна интегрированная система Smart GTest с PostgreSQL логированием:
+
+```sh
+# Быстрый старт Smart GTest
+cd tests/smart_gtest
+./quick_start.sh
+
+# Ручной запуск тестов
+make build
+./build/test_example
+
+# CLI управление базой данных
+./build/smart_test_cli status
+./build/smart_test_cli recent
+```
+
+Подробнее см. `tests/smart_gtest/README.md`
+
 ## Примеры запуска с параметрами:
 ```sh
 # Пример: mutex-буфер, 3 производителя, 2 потребителя, 8 МБ буфер, 32 МБ данных

@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 #include <atomic>
+#include <iostream>
 #include <thread>
 #include <vector>
 #include <chrono>
-#include <numeric>
+#include <random>
+#include "smart_gtest/simple_smart_gtest.h"
 #include "ringbuffer/mutex_ring_buffer.h"
 #include "ringbuffer/lockfree_ring_buffer.h"
 
@@ -354,4 +356,14 @@ TYPED_TEST(RingBufferStressTest, HighContentionStressTest) {
     auto diff = std::abs(static_cast<long>(total_produced.load()) - 
                         static_cast<long>(total_consumed.load()));
     EXPECT_LE(diff, static_cast<long>(buffer_size));
+}
+
+// Custom main для SmartGTest
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    
+    // Инициализация SmartGTest
+    SMART_GTEST_INIT();
+    
+    return RUN_ALL_TESTS();
 }

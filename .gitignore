@@ -19,9 +19,15 @@ build/
 # Executables
 *.exe
 *.out
-codebase/ring_buffer
-mcp/__pycache__/
 *.app
 
-# Python virtual environments
-venv_py312/
+# ImGui settings (regenerated automatically)
+imgui.ini
+
+# Python cache (if any Python tools are used)
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+venv_*/
