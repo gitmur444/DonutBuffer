@@ -87,6 +87,18 @@ python -m mcp --provider openai --openai-key YOUR_API_KEY "ваш запрос" 
 ```
 
 ### Использование OpenAI (ключ из переменной окружения)
+## 🚀 Continuous Integration
+
+Проект использует GitHub Actions для автоматического тестирования при каждом push:
+
+- **CI Tests** - полный набор тестов на Linux (Ubuntu) и macOS
+- **Quick Tests** - быстрые проверки для feature веток
+- **Performance Tests** - расширенные тесты производительности
+
+[![CI Status](https://github.com/owner/DonutBuffer/workflows/DonutBuffer%20CI%20Tests/badge.svg)](https://github.com/owner/DonutBuffer/actions)
+
+Подробнее о workflows: [.github/workflows/README.md](.github/workflows/README.md)
+
 ```bash
 export OPENAI_API_KEY=YOUR_API_KEY
 python -m mcp --provider openai "ваш запрос" --full-response
