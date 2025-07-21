@@ -8,6 +8,11 @@ import asyncio
 from typing import TypedDict
 from dotenv import load_dotenv
 
+# Disable LangSmith tracking
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+os.environ["LANGCHAIN_ENDPOINT"] = ""
+os.environ["LANGCHAIN_API_KEY"] = ""
+
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
