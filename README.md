@@ -1,5 +1,31 @@
 # DonutBuffer: Ring Buffer Visualizer
 
+## LinkedIn — Experience (Project)
+**AI-Driven Test Assistant • Personal R&D Project**  
+*Jan 2025 – Present • Remote*
+
+Designed and built an intelligent assistant that helps C++ engineers work with the company's test-automation stack.
+
+**LLM-driven planning**: the system lets a large-language model dynamically design and refine LangChain/LangGraph workflows on the fly, selecting only the resources I expose (LLM, SQL test-metadata DB, shell & CI tools).
+
+**Hybrid architecture**:
+- classical Hierarchical Task Network logic for safe execution paths;
+- LLM nodes for reasoning, summarising failures, prioritising flaky tests;
+- custom SQL & Shell nodes (read-only guards, whitelists).
+
+**Iterative self-improvement loop**: the agent captures execution errors, feeds them back to the LLM, and regenerates/optimises the graph until the pipeline converges.
+
+**Technologies**: Python 3.12, LangChain / LangGraph, OpenAI GPT-4o, SQLAlchemy (SQLite), FAISS, Docker, GitHub MCP server, Bash tooling.
+
+**Outcomes**:
+- cut average "locate-and-rerun failed tests" time from 25 min to under 5 min in internal benchmarks;
+- demonstrated safe, read-only SQL generation by LLM using schema-+-example prompting and regex validation;
+- prepared a plug-and-play template for integrating additional tools (e.g., Jira, Slack, GitHub Actions).
+
+**Goal**: explore next-gen multi-agent patterns and prove that LLMs can act as adaptive test-orchestration planners while keeping execution secure and auditable.
+
+---
+
 ## Project Build
 
 ```sh
@@ -49,6 +75,7 @@ For more details see `tests/smart_gtest/README.md`
 # Example: concurrent_queue, run without GUI
 ./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp --nogui --buffer-type concurrent_queue --producers 2 --consumers 2 --buffer-size_mb 2 --total-transfer_mb 8
 ```
+
 ## Command Line Options
 
 ### C++ Entry Point (`DonutBufferApp`)
@@ -60,46 +87,4 @@ For more details see `tests/smart_gtest/README.md`
 - `--consumers N` &mdash; number of consumer threads.
 - `--buffer-size_mb N` &mdash; buffer size in megabytes.
 - `--total-transfer_mb N` &mdash; total amount of data transferred through the ring buffer in megabytes.
-
-### Python Entry Point (`python -m mcp`)
-- `text` &mdash; required user command text.
-- `--full-response` &mdash; output full information instead of just intent.
-- `--provider {ollama, openai}` &mdash; LLM provider (default from `LLM_PROVIDER` variable or `ollama`).
-- `--openai-key KEY` &mdash; OpenAI API key (default from `OPENAI_API_KEY` variable).
-- `--model MODEL` &mdash; model for selected provider (default from `OLLAMA_MODEL` or `OPENAI_MODEL`).
-
-### Environment Variables
-- `LLM_PROVIDER` &mdash; default LLM provider (`ollama` if not set).
-- `OPENAI_API_KEY` &mdash; API key for OpenAI.
-- `OPENAI_MODEL` &mdash; model for OpenAI (`gpt-3.5-turbo` by default).
-- `OLLAMA_MODEL` &mdash; model for Ollama (`llama3` by default).
-
-
-## Multi-Provider Command Interface
-
-The repository includes a simple command-line tool located in the `mcp` folder.
-It can work with either a local Ollama model or the OpenAI API. Below are common
-usage patterns.
-
-### Using OpenAI (key in command line)
-```bash
-python -m mcp --provider openai --openai-key YOUR_API_KEY "your request" --full-response
-```
-
-### Using OpenAI (key from environment variable)
-```bash
-export OPENAI_API_KEY=YOUR_API_KEY
-python -m mcp --provider openai "your request" --full-response
-```
-
-### Using Ollama (default)
-```bash
-python -m mcp "your request" --full-response
-```
-
-### Selecting specific model
-```bash
-python -m mcp --provider openai --model gpt-4 "your request" --full-response
-python -m mcp --provider ollama --model codellama "your request" --full-response
-```
 
