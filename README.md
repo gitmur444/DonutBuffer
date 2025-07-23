@@ -1,78 +1,78 @@
 # DonutBuffer: Ring Buffer Visualizer
 
-## Сборка проекта
+## Project Build
 
 ```sh
 make
 ```
-- Сборка выполняется из корня проекта. Makefile автоматически создаёт папку build, вызывает cmake и собирает проект.
-- Для очистки сборки используйте:
+- Build is performed from the project root. Makefile automatically creates the build folder, calls cmake and builds the project.
+- To clean the build use:
 ```sh
 make clean
 ```
 
-## Запуск приложения
+## Running the Application
 
-На macOS бинарник находится внутри .app:
+On macOS the binary is located inside .app:
 ```sh
-./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp [опции]
+./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp [options]
 ```
 
-## Smart GTest система
+## Smart GTest System
 
-В проекте доступна интегрированная система Smart GTest с PostgreSQL логированием:
+The project includes an integrated Smart GTest system with PostgreSQL logging:
 
 ```sh
-# Быстрый старт Smart GTest
+# Quick start Smart GTest
 cd tests/smart_gtest
 ./quick_start.sh
 
-# Ручной запуск тестов
+# Manual test execution
 make build
 ./build/test_example
 
-# CLI управление базой данных
+# CLI database management
 ./build/smart_test_cli status
 ./build/smart_test_cli recent
 ```
 
-Подробнее см. `tests/smart_gtest/README.md`
+For more details see `tests/smart_gtest/README.md`
 
-## Примеры запуска с параметрами:
+## Examples of running with parameters:
 ```sh
-# Пример: mutex-буфер, 3 производителя, 2 потребителя, 8 МБ буфер, 32 МБ данных
+# Example: mutex buffer, 3 producers, 2 consumers, 8 MB buffer, 32 MB data
 ./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp --buffer-type mutex --producers 3 --consumers 2 --buffer-size_mb 8 --total-transfer_mb 32
 
-# Пример: lockfree-буфер, 1 производитель, 1 потребитель, 4 МБ буфер, 16 МБ данных
+# Example: lockfree buffer, 1 producer, 1 consumer, 4 MB buffer, 16 MB data
 ./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp --buffer-type lockfree --producers 1 --consumers 1 --buffer-size_mb 4 --total-transfer_mb 16
 
-# Пример: concurrent_queue, запуск без GUI
+# Example: concurrent_queue, run without GUI
 ./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp --nogui --buffer-type concurrent_queue --producers 2 --consumers 2 --buffer-size_mb 2 --total-transfer_mb 8
 ```
-## Опции командной строки
+## Command Line Options
 
-### С++ точка входа (`DonutBufferApp`)
-- `--nogui` &mdash; запуск без графического интерфейса. По умолчанию значение `true`.
-- `--mutex-vs-lockfree` &mdash; выполнить тест сравнения `MutexRingBuffer` и `LockFreeRingBuffer` и выйти.
-- `--concurrent-vs-lockfree` &mdash; выполнить тест `ConcurrentQueue` против `LockFreeRingBuffer` и выйти.
-- `--buffer-type {lockfree, mutex, concurrent_queue}` &mdash; тип используемого буфера.
-- `--producers N` &mdash; количество потоков-производителей.
-- `--consumers N` &mdash; количество потоков-потребителей.
-- `--buffer-size_mb N` &mdash; размер буфера в мегабайтах.
-- `--total-transfer_mb N` &mdash; общий объём передаваемых данных через ринг-буфер в мегабайтах.
+### C++ Entry Point (`DonutBufferApp`)
+- `--nogui` &mdash; run without graphical interface. Default value is `true`.
+- `--mutex-vs-lockfree` &mdash; execute comparison test between `MutexRingBuffer` and `LockFreeRingBuffer` and exit.
+- `--concurrent-vs-lockfree` &mdash; execute test of `ConcurrentQueue` against `LockFreeRingBuffer` and exit.
+- `--buffer-type {lockfree, mutex, concurrent_queue}` &mdash; type of buffer used.
+- `--producers N` &mdash; number of producer threads.
+- `--consumers N` &mdash; number of consumer threads.
+- `--buffer-size_mb N` &mdash; buffer size in megabytes.
+- `--total-transfer_mb N` &mdash; total amount of data transferred through the ring buffer in megabytes.
 
-### Python точка входа (`python -m mcp`)
-- `text` &mdash; обязательный текст команды пользователя.
-- `--full-response` &mdash; выводить полную информацию вместо только намерения.
-- `--provider {ollama, openai}` &mdash; LLM-провайдер (по умолчанию переменная `LLM_PROVIDER` или `ollama`).
-- `--openai-key KEY` &mdash; API-ключ OpenAI (по умолчанию переменная `OPENAI_API_KEY`).
-- `--model MODEL` &mdash; модель для выбранного провайдера (по умолчанию из `OLLAMA_MODEL` или `OPENAI_MODEL`).
+### Python Entry Point (`python -m mcp`)
+- `text` &mdash; required user command text.
+- `--full-response` &mdash; output full information instead of just intent.
+- `--provider {ollama, openai}` &mdash; LLM provider (default from `LLM_PROVIDER` variable or `ollama`).
+- `--openai-key KEY` &mdash; OpenAI API key (default from `OPENAI_API_KEY` variable).
+- `--model MODEL` &mdash; model for selected provider (default from `OLLAMA_MODEL` or `OPENAI_MODEL`).
 
-### Переменные окружения
-- `LLM_PROVIDER` &mdash; провайдер LLM по умолчанию (`ollama` если не задано).
-- `OPENAI_API_KEY` &mdash; ключ API для OpenAI.
-- `OPENAI_MODEL` &mdash; модель для OpenAI (`gpt-3.5-turbo` по умолчанию).
-- `OLLAMA_MODEL` &mdash; модель для Ollama (`llama3` по умолчанию).
+### Environment Variables
+- `LLM_PROVIDER` &mdash; default LLM provider (`ollama` if not set).
+- `OPENAI_API_KEY` &mdash; API key for OpenAI.
+- `OPENAI_MODEL` &mdash; model for OpenAI (`gpt-3.5-turbo` by default).
+- `OLLAMA_MODEL` &mdash; model for Ollama (`llama3` by default).
 
 
 ## Multi-Provider Command Interface
@@ -81,25 +81,25 @@ The repository includes a simple command-line tool located in the `mcp` folder.
 It can work with either a local Ollama model or the OpenAI API. Below are common
 usage patterns.
 
-### Использование OpenAI (ключ в командной строке)
+### Using OpenAI (key in command line)
 ```bash
-python -m mcp --provider openai --openai-key YOUR_API_KEY "ваш запрос" --full-response
+python -m mcp --provider openai --openai-key YOUR_API_KEY "your request" --full-response
 ```
 
-### Использование OpenAI (ключ из переменной окружения)
+### Using OpenAI (key from environment variable)
 ```bash
 export OPENAI_API_KEY=YOUR_API_KEY
-python -m mcp --provider openai "ваш запрос" --full-response
+python -m mcp --provider openai "your request" --full-response
 ```
 
-### Использование Ollama (по умолчанию)
+### Using Ollama (default)
 ```bash
-python -m mcp "ваш запрос" --full-response
+python -m mcp "your request" --full-response
 ```
 
-### Выбор конкретной модели
+### Selecting specific model
 ```bash
-python -m mcp --provider openai --model gpt-4 "ваш запрос" --full-response
-python -m mcp --provider ollama --model codellama "ваш запрос" --full-response
+python -m mcp --provider openai --model gpt-4 "your request" --full-response
+python -m mcp --provider ollama --model codellama "your request" --full-response
 ```
 
