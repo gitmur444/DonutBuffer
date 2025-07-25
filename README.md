@@ -1,4 +1,4 @@
-# DonutBuffer: Ring Buffer Visualizer
+# DonutBuffer: AI-Driven Test Assistant
 
 ## LinkedIn — Experience (Project)
 **AI-Driven Test Assistant • Personal R&D Project**  
