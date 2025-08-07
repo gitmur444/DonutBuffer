@@ -26,7 +26,9 @@ cp env_example.txt .env
 
 Run the agent:
 ```bash
-python test_agent.py
+ python tests/smart_gtest/ai_test_planner.py "Show me recent test results and identify any failed tests that need attention" 
+
+  source tests/smart_gtest/venv/bin/activate && python tests/smart_gtest/ai_test_planner.py "" 
 ```
 
 Example conversation:

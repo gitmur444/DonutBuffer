@@ -62,8 +62,31 @@ void SimpleTestLogger::OnTestEnd(const ::testing::TestInfo& test_info) {
 }
 
 void SimpleTestLogger::CheckDatabaseAvailability() {
-    // Проверка подключения к локальной PostgreSQL
-    int result = std::system("psql -d testdb -c '\\q' >/dev/null 2>&1");
+    // Проверка подключения к PostgreSQL в Docker контейнере
+    // Используем переменные окружения для безопасности
+    const char* db_host = std::getenv("POSTGRES_HOST");
+    const char* db_user = std::getenv("POSTGRES_USER"); 
+    const char* db_password = std::getenv("POSTGRES_PASSWORD");
+    const char* db_name = std::getenv("POSTGRES_DB");
+    
+    // Значения по умолчанию для Docker контейнера
+    if (!db_host) db_host = "localhost";
+    if (!db_user) db_user = "postgres";
+    if (!db_name) db_name = "smart_tests";
+    
+    if (!db_password) {
+        std::cout << "[SMART] ⚠️  POSTGRES_PASSWORD not set, database logging disabled" << std::endl;
+        db_available = false;
+        return;
+    }
+    
+    std::string check_cmd = "PGPASSWORD=" + std::string(db_password) + 
+                           " psql -h " + std::string(db_host) + 
+                           " -U " + std::string(db_user) + 
+                           " -d " + std::string(db_name) + 
+                           " -c '\\q' >/dev/null 2>&1";
+    
+    int result = std::system(check_cmd.c_str());
     db_available = (result == 0);
 }
 
@@ -96,7 +119,7 @@ void SimpleTestLogger::LogToActualTests(const std::string& suite, const std::str
     }
     
     // Формируем SQL с полными данными и явными приведениями типов
-    std::string sql = "SELECT upsert_actual_test_v2('" + suite + "'::VARCHAR(255), '" + name 
+    std::string sql = "SELECT upsert_actual_test('" + suite + "'::VARCHAR(255), '" + name 
                      + "'::VARCHAR(255), '" + status + "'::VARCHAR(20), " + std::to_string(duration_ms) + "::INTEGER";
     
     if (!failure_msg.empty()) {
@@ -118,21 +141,37 @@ void SimpleTestLogger::LogToActualTests(const std::string& suite, const std::str
     // Добавляем tags
     sql += ", '" + tags + "'::TEXT";
     
-    // Добавляем временные метки
-    sql += ", CURRENT_TIMESTAMP::TIMESTAMP";
-    sql += ", (CURRENT_TIMESTAMP + INTERVAL '" + std::to_string(duration_ms) + " milliseconds')::TIMESTAMP";
-    
     sql += ");";
     
     if (db_available) {
-        // Выполняем SQL для локальной PostgreSQL
-        std::string cmd = "psql -d testdb -c \"" + sql + "\" >/dev/null 2>&1";
+        // Выполняем SQL для PostgreSQL в Docker контейнере с переменными окружения
+        const char* db_host = std::getenv("POSTGRES_HOST");
+        const char* db_user = std::getenv("POSTGRES_USER"); 
+        const char* db_password = std::getenv("POSTGRES_PASSWORD");
+        const char* db_name = std::getenv("POSTGRES_DB");
+        
+        // Значения по умолчанию
+        if (!db_host) db_host = "localhost";
+        if (!db_user) db_user = "postgres";
+        if (!db_password) db_password = "postgres";
+        if (!db_name) db_name = "smart_tests";
+        
+        std::string cmd = "PGPASSWORD=" + std::string(db_password) + 
+                         " psql -h " + std::string(db_host) + 
+                         " -U " + std::string(db_user) + 
+                         " -d " + std::string(db_name) + 
+                         " -c \"" + sql + "\"";
+        // Debug: показать SQL запрос
+        std::cout << "[SMART] SQL: " << sql << std::endl;
+        
         int result = std::system(cmd.c_str());
         if (result == 0) {
             std::cout << "[SMART] ✅ Logged to database: " << suite << "." << name << " - " << status 
                       << " (tags: " << tags << ")" << std::endl;
         } else {
             std::cout << "[SMART] ❌ Database logging failed for: " << suite << "." << name << std::endl;
+            // Debug: показать команду
+            std::cout << "[SMART] Command: " << cmd << std::endl;
         }
     } else {
         std::cout << "[SMART] Would execute SQL: " << sql << std::endl;

@@ -62,13 +62,13 @@ all-tests: build-with-tests
 	fi
 	@echo ""
 	@echo "📋 Running Unit Tests..."
-	@cd build/tests && ./ringbuffer_tests
+	@cd build/tests && set -a && source ../../tests/smart_gtest/.env && set +a && ./ringbuffer_tests
 	@echo ""
 	@echo "📋 Running Concurrent Tests..."
-	@cd build/tests && ./ringbuffer_concurrent_tests
+	@cd build/tests && set -a && source ../../tests/smart_gtest/.env && set +a && ./ringbuffer_concurrent_tests
 	@echo ""
 	@echo "📋 Running Performance Tests..."
-	@cd build/tests && ./ringbuffer_performance_tests
+	@cd build/tests && set -a && source ../../tests/smart_gtest/.env && set +a && ./ringbuffer_performance_tests
 	@echo ""
 	@echo "📋 Running E2E Tests..."
 	@cd build/tests && ./e2e_buffer_tests

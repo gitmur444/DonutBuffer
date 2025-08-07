@@ -1,6 +1,7 @@
 # Basic ring buffer tests with GTest
 add_executable(ringbuffer_tests
     ringbuffer_tests.cpp
+    smart_gtest/simple_smart_gtest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ringbuffer/mutex_ring_buffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ringbuffer/lockfree_ring_buffer.cpp
 )
@@ -19,6 +20,7 @@ target_link_libraries(ringbuffer_tests
 # Advanced concurrent tests
 add_executable(ringbuffer_concurrent_tests
     ringbuffer_concurrent_tests.cpp
+    smart_gtest/simple_smart_gtest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ringbuffer/mutex_ring_buffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ringbuffer/lockfree_ring_buffer.cpp
 )
@@ -37,6 +39,7 @@ target_link_libraries(ringbuffer_concurrent_tests
 # Performance comparison tests
 add_executable(ringbuffer_performance_tests
     ringbuffer_performance_tests.cpp
+    smart_gtest/simple_smart_gtest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ringbuffer/mutex_ring_buffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ringbuffer/lockfree_ring_buffer.cpp
 )
