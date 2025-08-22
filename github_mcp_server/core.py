@@ -19,7 +19,7 @@ class BaseWizard:
     
     def print_step(self, step: int, message: str) -> None:
         """Print step with beautiful formatting."""
-        print(f"\n{Colors.CYAN}🔮 Шаг {step}/4: {Colors.BOLD}{message}{Colors.NC}")
+        print(f"\n{Colors.CYAN}🔮 Шаг {step}/5: {Colors.BOLD}{message}{Colors.NC}")
         
     def print_success(self, message: str) -> None:
         """Print success message."""

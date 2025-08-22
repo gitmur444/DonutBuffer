@@ -12,6 +12,11 @@ from github_setup import GitHubSetup
 from mcp_setup import MCPSetup
 from integration_test import IntegrationTest
 
+# Импортируем Ambient Agent для тестирования
+import sys
+sys.path.append(str(Path(__file__).parent))
+from ambient.ambient_agent import AmbientAgent
+
 class DonutAIWizard(BaseWizard):
     """Главный мастер настройки DonutBuffer AI интеграции"""
     
@@ -38,7 +43,7 @@ class DonutAIWizard(BaseWizard):
         self.print_header()
         
         try:
-            # Выполняем все 4 шага
+            # Выполняем все 5 шагов
             if not self.dependency_checker.check_dependencies():
                 self.print_error("Установите недостающие зависимости и запустите снова")
                 return
@@ -54,11 +59,17 @@ class DonutAIWizard(BaseWizard):
             if not self.integration_test.test_integration():
                 self.print_warning("Интеграция работает с предупреждениями")
             
+            if not self.test_ambient_system():
+                self.print_error("❌ E2E тест Ambient Agent провален!")
+                self.print_error("Система неработоспособна. Cursor-agent НЕ будет запущен.")
+                self.print_info("💡 Проверьте GitHub API доступность и повторите настройку")
+                return
+            
             # Настройка завершена успешно
-            self._print_success_message()
+            self.print_success_message()
             
             # Запускаем cursor-agent
-            self._launch_cursor_agent()
+            self.launch_cursor_agent()
             
         except KeyboardInterrupt:
             print(f"\n{Colors.YELLOW}⚠️  Настройка прервана пользователем{Colors.NC}")
@@ -84,29 +95,40 @@ class DonutAIWizard(BaseWizard):
         print(f"\n{Colors.BOLD}🚀 AI-powered анализ DonutBuffer готов к работе!{Colors.NC}")
 
     def launch_cursor_agent(self) -> None:
-        """Запуск cursor-agent с приветственным сообщением"""
-        
-        # Формируем стартовый промпт
-        startup_prompt = (
-            "GitHub интеграция настроена. Доступные сценарии:\n"
-            "• Анализ производительности lockfree vs mutex\n"
-            "• Диагностика упавших тестов в CI/CD\n"
-            "• Оптимизация C++ ring buffer\n"
-            "• Мониторинг GitHub Actions\n"
-            "Что анализируем?"
-        )
+        """Запуск cursor-agent без стартового промпта"""
         
         try:
-            # Запускаем cursor-agent с приветственным сообщением
+            # Запускаем cursor-agent в обычном режиме
             import subprocess
-            subprocess.run([
-                "cursor-agent", "chat", startup_prompt
-            ])
+            subprocess.run(["cursor-agent"])
         except KeyboardInterrupt:
             print(f"\n{Colors.CYAN}👋 До встречи! Используйте 'cursor-agent' для продолжения работы.{Colors.NC}")
         except Exception as e:
             self.print_error(f"Ошибка запуска cursor-agent: {e}")
             print(f"{Colors.CYAN}💡 Запустите вручную: cursor-agent{Colors.NC}")
+    
+    def test_ambient_system(self) -> bool:
+        """Шаг 5: Тестирование Ambient Agent системы событий"""
+        self.print_step(5, "Тестирование Ambient Agent")
+        
+        try:
+            # Создаем экземпляр Ambient Agent
+            ambient_agent = AmbientAgent(self.donut_dir)
+            
+            # Запускаем тест системы событий
+            success = ambient_agent.test_event_system()
+            
+            if success:
+                self.print_success("Ambient Agent система событий работает корректно")
+                return True
+            else:
+                self.print_warning("Ambient Agent система событий не прошла тест")
+                return False
+                
+        except Exception as e:
+            self.print_warning(f"Ошибка тестирования Ambient Agent: {e}")
+            self.print_info("💡 Ambient Agent может не работать, но основная интеграция готова")
+            return False
 
 if __name__ == "__main__":
     wizard = DonutAIWizard()
