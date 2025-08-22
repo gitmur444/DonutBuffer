@@ -1,0 +1,3 @@
+#!/bin/bash
+# 🧙‍♂️ DonutBuffer AI Wizard - короткая команда
+exec ./run-wizard "$@" 

@@ -1,0 +1,36 @@
+#!/bin/bash
+# 📊 DonutBuffer CI/CD Monitor
+# Автоматически активирует venv и запускает мониторинг CI/CD
+
+set -e  # Exit on any error
+
+echo "📊 DonutBuffer CI/CD Monitor"
+echo "============================"
+
+# Check if venv exists
+if [ ! -d "venv" ]; then
+    echo "❌ Виртуальная среда не найдена!"
+    echo "💡 Запустите сначала: ./setup-github"
+    exit 1
+fi
+
+# Check if setup was completed
+if [ ! -f "github_mcp_server/check_cicd.py" ]; then
+    echo "❌ CI/CD мониторинг не настроен!"
+    echo "💡 Запустите сначала: ./setup-github"
+    exit 1
+fi
+
+# Activate venv
+echo "🐍 Активация виртуальной среды..."
+source venv/bin/activate
+
+# Run CI/CD monitoring
+echo "🔍 Запуск анализа CI/CD для DonutBuffer..."
+python github_mcp_server/check_cicd.py
+
+echo ""
+echo "✅ Анализ CI/CD завершен!"
+echo "💡 Для интерактивного анализа:"
+echo "   cursor-agent \"какие тесты упали в DonutBuffer?\""
+echo "   cursor-agent \"анализ производительности ring buffer\"" 

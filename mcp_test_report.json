@@ -1,0 +1,18 @@
+{
+  "timestamp": "2025-08-19 18:00:39",
+  "github_token_present": true,
+  "github_token_length": 40,
+  "mcp_server_path": "../github-mcp-server",
+  "mcp_server_exists": true,
+  "test_results": {
+    "prerequisites": true,
+    "mcp_startup": true,
+    "mcp_initialization": true,
+    "github_api": true,
+    "cursor_agent": true,
+    "donutbuffer_specific": true
+  },
+  "recommendations": [
+    "\u0412\u0441\u0435 \u0442\u0435\u0441\u0442\u044b \u043f\u0440\u043e\u0448\u043b\u0438 \u0443\u0441\u043f\u0435\u0448\u043d\u043e! \u041c\u043e\u0436\u043d\u043e \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c \u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u044e."
+  ]
+}

@@ -1,0 +1,32 @@
+#!/bin/bash
+# 🚀 DonutBuffer GitHub MCP Server Starter
+# Автоматически активирует venv и запускает MCP сервер
+
+set -e  # Exit on any error
+
+echo "🚀 DonutBuffer GitHub MCP Server"
+echo "================================="
+
+# Check if venv exists
+if [ ! -d "venv" ]; then
+    echo "❌ Виртуальная среда не найдена!"
+    echo "💡 Запустите сначала: ./setup-github"
+    exit 1
+fi
+
+# Check if setup was completed
+if [ ! -f "github_mcp_server/start_mcp_server.py" ]; then
+    echo "❌ MCP сервер не настроен!"
+    echo "💡 Запустите сначала: ./setup-github"
+    exit 1
+fi
+
+# Activate venv
+echo "🐍 Активация виртуальной среды..."
+source venv/bin/activate
+
+# Run MCP server
+echo "🔗 Запуск GitHub MCP Server для DonutBuffer..."
+echo "💡 Для остановки используйте Ctrl+C"
+echo ""
+python github_mcp_server/start_mcp_server.py 

@@ -1,90 +1,90 @@
-# DonutBuffer: AI-Driven Test Assistant
+# 🚀 DonutBuffer GitHub MCP Integration
 
-## LinkedIn — Experience (Project)
-**AI-Driven Test Assistant • Personal R&D Project**  
-*Jan 2025 – Present • Remote*
+Интеграция Cursor Agent с GitHub CI/CD для проекта DonutBuffer.
 
-Designed and built an intelligent assistant that helps C++ engineers work with the company's test-automation stack.
+## 📋 Быстрый старт
 
-**LLM-driven planning**: the system lets a large-language model dynamically design and refine LangChain/LangGraph workflows on the fly, selecting only the resources I expose (LLM, SQL test-metadata DB, shell & CI tools).
+### 1. Установка зависимостей
+```bash
+pip install -r requirements.txt
+```
 
-**Hybrid architecture**:
-- classical Hierarchical Task Network logic for safe execution paths;
-- LLM nodes for reasoning, summarising failures, prioritising flaky tests;
-- custom SQL & Shell nodes (read-only guards, whitelists).
+### 2. Настройка
+```bash
+# Установите GitHub токен
+export GITHUB_TOKEN="your_token_here"
 
-**Iterative self-improvement loop**: the agent captures execution errors, feeds them back to the LLM, and regenerates/optimises the graph until the pipeline converges.
+# Запустите автоматическую настройку
+python setup_github_integration.py
+```
 
-**Technologies**: Python 3.12, LangChain / LangGraph, OpenAI GPT-4o, SQLAlchemy (SQLite), FAISS, Docker, GitHub MCP server, Bash tooling.
+### 3. Тестирование
+```bash
+# Проверка интеграции
+python test_mcp_connection.py
 
-**Outcomes**:
-- cut average "locate-and-rerun failed tests" time from 25 min to under 5 min in internal benchmarks;
-- demonstrated safe, read-only SQL generation by LLM using schema-+-example prompting and regex validation;
-- prepared a plug-and-play template for integrating additional tools (e.g., Jira, Slack, GitHub Actions).
+# Запуск MCP сервера
+python start_mcp_server.py
 
-**Goal**: explore next-gen multi-agent patterns and prove that LLMs can act as adaptive test-orchestration planners while keeping execution secure and auditable.
+# Мониторинг CI/CD
+python check_cicd.py
+```
+
+## 🎯 Примеры использования
+
+### Анализ упавших тестов
+```bash
+cursor-agent "Какие тесты упали в DonutBuffer ночью?"
+cursor-agent "Покажи логи последнего failed workflow"
+```
+
+### Мониторинг производительности
+```bash
+cursor-agent "Анализ производительности C++ тестов DonutBuffer"
+cursor-agent "Предложи оптимизации для ring buffer тестов"
+```
+
+### Работа с Pull Requests
+```bash
+cursor-agent "Статус PR с изменениями в lockfree ring buffer"
+cursor-agent "Анализ code review для последнего PR"
+```
+
+## 📁 Структура файлов
+
+- `setup_github_integration.py` - Автоматическая настройка
+- `test_mcp_connection.py` - Тестирование интеграции
+- `start_mcp_server.py` - Запуск MCP сервера
+- `check_cicd.py` - Мониторинг CI/CD
+- `mcp_config.json` - Конфигурация MCP
+- `requirements.txt` - Python зависимости
+
+## 🔧 Настройка GitHub Token
+
+1. Перейдите: https://github.com/settings/tokens?type=beta
+2. Создайте Fine-grained personal access token
+3. Выберите репозитории (DonutBuffer)
+4. Добавьте права:
+   - Actions: Read & Write
+   - Contents: Read
+   - Pull requests: Read & Write
+   - Metadata: Read
+
+## 🚀 Интеграция в DonutBuffer workflow
+
+Добавьте в ваш GitHub Actions:
+
+```yaml
+- name: AI Analysis
+  run: |
+    export GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+    python DonutBuffer/github_mcp_server/check_cicd.py
+```
 
 ---
 
-## Project Build
-
-```sh
-make
-```
-- Build is performed from the project root. Makefile automatically creates the build folder, calls cmake and builds the project.
-- To clean the build use:
-```sh
-make clean
-```
-
-## Running the Application
-
-On macOS the binary is located inside .app:
-```sh
-./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp [options]
-```
-
-## Smart GTest System
-
-The project includes an integrated Smart GTest system with PostgreSQL logging:
-
-```sh
-# Quick start Smart GTest
-cd tests/smart_gtest
-./quick_start.sh
-
-# Manual test execution
-make build
-./build/test_example
-
-# CLI database management
-./build/smart_test_cli status
-./build/smart_test_cli recent
-```
-
-For more details see `tests/smart_gtest/README.md`
-
-## Examples of running with parameters:
-```sh
-# Example: mutex buffer, 3 producers, 2 consumers, 8 MB buffer, 32 MB data
-./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp --buffer-type mutex --producers 3 --consumers 2 --buffer-size_mb 8 --total-transfer_mb 32
-
-# Example: lockfree buffer, 1 producer, 1 consumer, 4 MB buffer, 16 MB data
-./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp --buffer-type lockfree --producers 1 --consumers 1 --buffer-size_mb 4 --total-transfer_mb 16
-
-# Example: concurrent_queue, run without GUI
-./build/DonutBufferApp.app/Contents/MacOS/DonutBufferApp --nogui --buffer-type concurrent_queue --producers 2 --consumers 2 --buffer-size_mb 2 --total-transfer_mb 8
-```
-
-## Command Line Options
-
-### C++ Entry Point (`DonutBufferApp`)
-- `--nogui` &mdash; run without graphical interface. Default value is `true`.
-- `--mutex-vs-lockfree` &mdash; execute comparison test between `MutexRingBuffer` and `LockFreeRingBuffer` and exit.
-- `--concurrent-vs-lockfree` &mdash; execute test of `ConcurrentQueue` against `LockFreeRingBuffer` and exit.
-- `--buffer-type {lockfree, mutex, concurrent_queue}` &mdash; type of buffer used.
-- `--producers N` &mdash; number of producer threads.
-- `--consumers N` &mdash; number of consumer threads.
-- `--buffer-size_mb N` &mdash; buffer size in megabytes.
-- `--total-transfer_mb N` &mdash; total amount of data transferred through the ring buffer in megabytes.
-
+Интеграция специально оптимизирована для C++ проекта DonutBuffer с фокусом на:
+- 🧪 Анализ производительности ring buffer тестов
+- 🔄 Мониторинг lockfree vs mutex реализаций
+- 📊 Отчеты о качестве кода и тестов
+- 🛠️ Автоматические рекомендации по оптимизации
