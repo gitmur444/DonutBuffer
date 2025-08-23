@@ -117,8 +117,27 @@ class DonutAIWizard(BaseWizard):
     def start_ambient_agent_background_no_sig(self) -> None:
         """Стартует AmbientAgent в фоновом потоке без перехвата Ctrl+C."""
         try:
+            import os, sys
             self._ambient = AmbientAgent(self.donut_dir, install_signal_handlers=False)
-            t = threading.Thread(target=self._ambient.start, daemon=True)
+
+            def _runner():
+                # Полностью подавляем вывод фонового агента, чтобы не мешать TUI
+                devnull = None
+                prev_out, prev_err = sys.stdout, sys.stderr
+                try:
+                    devnull = open(os.devnull, 'w')
+                    sys.stdout = devnull
+                    sys.stderr = devnull
+                    self._ambient.start()
+                finally:
+                    try:
+                        if devnull:
+                            devnull.close()
+                    except Exception:
+                        pass
+                    sys.stdout, sys.stderr = prev_out, prev_err
+
+            t = threading.Thread(target=_runner, daemon=True)
             t.start()
         except Exception as e:
             self.print_warning(f"Не удалось запустить Ambient Agent в фоне: {e}")
