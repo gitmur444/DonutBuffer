@@ -23,7 +23,7 @@ class AgentInjector(BaseWizard):
         
     def inject_prompt(self, prompt: str, source: str = "ambient") -> bool:
         """
-        Отправляет промпт в cursor-agent
+        Отправляет промпт в активную сессию cursor-agent (как от пользователя)
         
         Args:
             prompt: Текст промпта для отправки
@@ -32,13 +32,14 @@ class AgentInjector(BaseWizard):
         Returns:
             bool: Успешность отправки
         """
-        self.print_info(f"🤖 [{source}] Отправляю промпт в cursor-agent...")
+        self.print_info(f"🤖 [{source}] Отправляю в активную сессию cursor-agent...")
         
         try:
-            # Метод 1: Попытка отправить через CLI с новой сессией
+            # Метод 1: Отправляем в активную сессию как обычное сообщение пользователя
             result = subprocess.run([
-                "cursor-agent", "chat", 
-                f"[Автоанализ от {source}]\n\n{prompt}"
+                "cursor-agent", 
+                prompt,  # Без префиксов - как будто пользователь написал
+                "--print"
             ], 
             capture_output=True, 
             text=True, 
@@ -46,17 +47,44 @@ class AgentInjector(BaseWizard):
             )
             
             if result.returncode == 0:
-                self.print_success(f"Промпт отправлен через cursor-agent CLI")
+                self.print_success(f"✅ Промпт отправлен в cursor-agent")
                 return True
             else:
                 self.print_warning(f"CLI ошибка: {result.stderr}")
-                return self.fallback_to_file_injection(prompt, source)
+                return self.try_resume_method(prompt, source)
                 
         except subprocess.TimeoutExpired:
             self.print_warning("Timeout при отправке через CLI")
-            return self.fallback_to_file_injection(prompt, source)
+            return self.try_resume_method(prompt, source)
         except Exception as e:
             self.print_warning(f"Ошибка CLI: {e}")
+            return self.try_resume_method(prompt, source)
+    
+    def try_resume_method(self, prompt: str, source: str) -> bool:
+        """Пытается найти активную сессию и отправить туда"""
+        try:
+            # Получаем список сессий
+            result = subprocess.run([
+                "cursor-agent", "ls"
+            ], capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0 and result.stdout.strip():
+                # Если есть сессии, попробуем отправить в последнюю
+                self.print_info("🔄 Пытаюсь отправить в последнюю сессию...")
+                result = subprocess.run([
+                    "cursor-agent", "resume", 
+                    prompt
+                ], capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    self.print_success("✅ Промпт отправлен через resume")
+                    return True
+            
+            # Если не удалось - fallback
+            return self.fallback_to_file_injection(prompt, source)
+            
+        except Exception as e:
+            self.print_warning(f"Ошибка resume: {e}")
             return self.fallback_to_file_injection(prompt, source)
     
     def fallback_to_file_injection(self, prompt: str, source: str) -> bool:
@@ -71,13 +99,13 @@ class AgentInjector(BaseWizard):
             prompt_file = ambient_dir / f"{source}_{timestamp}.md"
             
             with open(prompt_file, 'w', encoding='utf-8') as f:
-                f.write(f"# Автоанализ от {source}\n\n")
-                f.write(f"**Время:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(f"**Промпт:**\n\n{prompt}\n\n")
-                f.write("---\n*Скопируйте этот промпт в cursor-agent для анализа*\n")
+                f.write(f"# 🤖 Ambient Agent Notification\n\n")
+                f.write(f"**Time:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write(f"{prompt}\n\n")
+                f.write("---\n*Copy this message and paste into cursor-agent*\n")
             
-            self.print_warning(f"Промпт сохранен в файл: {prompt_file}")
-            self.print_info("💡 Откройте файл и скопируйте промпт в cursor-agent")
+            self.print_warning(f"💾 Сообщение сохранено: {prompt_file}")
+            self.print_info("💡 Скопируйте содержимое файла в cursor-agent")
             return True
             
         except Exception as e:

@@ -30,10 +30,11 @@ class GitHubMonitor(BaseWizard):
         self.monitoring = False
         self.monitor_thread: Optional[threading.Thread] = None
         self.last_check_time = time.time()
-        self.known_failures: Set[str] = set()
+        self.seen_runs: Set[str] = set()
+        self.start_time = time.time()
         
         # Настройки
-        self.check_interval = 60  # секунд между проверками
+        self.check_interval = 5  # быстрее реагируем
         
     def detect_repo_name(self) -> Optional[str]:
         """Определяет имя GitHub репозитория"""
@@ -79,9 +80,15 @@ class GitHubMonitor(BaseWizard):
             target=self.monitoring_loop,
             daemon=True
         )
+        # Перед запуском — запоминаем текущие ранны, чтобы не слать историю
+        try:
+            self._baseline_runs()
+        except Exception:
+            pass
         self.monitor_thread.start()
         
-        self.print_success(f"🔍 GitHub мониторинг запущен (repo: {self.repo_name or 'unknown'})")
+        # Лаконичное сообщение
+        self.print_info("GitHub мониторинг: активен")
         return True
     
     def stop_monitoring(self) -> None:
@@ -89,7 +96,7 @@ class GitHubMonitor(BaseWizard):
         self.monitoring = False
         if self.monitor_thread:
             self.monitor_thread.join(timeout=10)
-        self.print_info("🔍 GitHub мониторинг остановлен")
+        self.print_info("GitHub мониторинг: остановлен")
     
     def monitoring_loop(self) -> None:
         """Основной цикл мониторинга"""
@@ -112,18 +119,18 @@ class GitHubMonitor(BaseWizard):
                 time.sleep(30)  # Пауза при ошибке
     
     def check_workflow_runs(self) -> None:
-        """Проверяет workflow runs на наличие падений"""
+        """Проверяет workflow runs на наличие изменений"""
         if not self.repo_name:
             return
             
         try:
             headers = {"Authorization": f"token {self.github_token}"}
             
-            # Получаем недавние workflow runs
+            # Получаем недавние workflow runs (все статусы)
             url = f"https://api.github.com/repos/{self.repo_name}/actions/runs"
             params = {
-                "per_page": 10,
-                "status": "completed"
+                "per_page": 5,
+                # Без фильтра по статусу - получаем все изменения
             }
             
             response = requests.get(url, headers=headers, params=params, timeout=10)
@@ -134,74 +141,52 @@ class GitHubMonitor(BaseWizard):
             data = response.json()
             
             for run in data.get("workflow_runs", []):
-                run_id = str(run["id"])
+                run_id = str(run.get("id"))
+                if not run_id:
+                    continue
+                status = run.get("status")
                 conclusion = run.get("conclusion")
-                
-                # Проверяем на неудачные runs
-                if conclusion == "failure" and run_id not in self.known_failures:
-                    self.known_failures.add(run_id)
-                    
-                    # Получаем детали об ошибке
-                    self.handle_workflow_failure(run)
+                # Новые ранны: queued/in_progress — считаем стартом
+                if run_id not in self.seen_runs:
+                    if status in ("queued", "in_progress") and not conclusion:
+                        self.handle_workflow_event(run)
+                    # Помечаем как увиденный, чтобы не слать историю
+                    self.seen_runs.add(run_id)
                     
         except Exception as e:
             self.print_warning(f"Ошибка проверки workflow runs: {e}")
     
-    def handle_workflow_failure(self, run: Dict) -> None:
-        """Обрабатывает упавший workflow run"""
-        self.print_warning(f"🚨 Упал workflow: {run['name']} (#{run['run_number']})")
+    def handle_workflow_event(self, run: Dict) -> None:
+        """Обрабатывает событие workflow run"""
+        status = run.get("status")
+        conclusion = run.get("conclusion")
         
-        # Получаем логи
-        logs = self.get_workflow_logs(run["id"])
+        # Определяем тип события
+        if status == "in_progress" or status == "queued":
+            event_type = "запущен"
+        else:
+            event_type = f"изменился ({status})"
         
         # Формируем данные события
         event_data = {
             "run_id": run["id"],
-            "run_name": run["name"],
             "run_number": run["run_number"], 
             "workflow_name": run["name"],
-            "conclusion": run["conclusion"],
+            "status": status,
+            "conclusion": conclusion,
+            "event_type": event_type,
             "html_url": run["html_url"],
-            "head_commit": run.get("head_commit", {}),
-            "logs": logs[:2000] if logs else "Логи недоступны"  # Ограничиваем размер
+            "head_commit": run.get("head_commit", {})
         }
         
         # Генерируем событие
         self.event_system.emit_simple(
-            event_type=EventType.GITHUB_TEST_FAILED,
+            event_type=EventType.GITHUB_WORKFLOW_EVENT,
             data=event_data,
             source="github_monitor",
-            priority=4  # Высокий приоритет
+            priority=3
         )
-    
-    def get_workflow_logs(self, run_id: int) -> Optional[str]:
-        """Получает логи workflow run"""
-        try:
-            headers = {"Authorization": f"token {self.github_token}"}
-            
-            # Получаем jobs для run
-            jobs_url = f"https://api.github.com/repos/{self.repo_name}/actions/runs/{run_id}/jobs"
-            jobs_response = requests.get(jobs_url, headers=headers, timeout=10)
-            
-            if jobs_response.status_code != 200:
-                return None
-                
-            jobs_data = jobs_response.json()
-            logs = []
-            
-            for job in jobs_data.get("jobs", []):
-                if job.get("conclusion") == "failure":
-                    logs.append(f"❌ Job: {job['name']}")
-                    
-                    for step in job.get("steps", []):
-                        if step.get("conclusion") == "failure":
-                            logs.append(f"  ❌ Step: {step['name']}")
-                            
-            return "\n".join(logs) if logs else None
-            
-        except Exception as e:
-            self.print_warning(f"Ошибка получения логов: {e}")
-            return None
+
     
     def check_pull_requests(self) -> None:
         """Проверяет новые pull requests"""
@@ -271,10 +256,10 @@ class GitHubMonitor(BaseWizard):
             "repo_name": self.repo_name,
             "monitoring_active": self.monitoring,
             "last_check": self.last_check_time,
-            "known_failures": len(self.known_failures)
+            "seen_runs": len(self.seen_runs)
         }
-        
-        self.print_info(f"📊 Статус мониторинга: {result}")
+        # Лаконичный вывод
+        self.print_info("GitHub мониторинг: ok")
         return result
     
     def get_headers(self) -> Dict[str, str]:
@@ -396,3 +381,19 @@ class GitHubMonitor(BaseWizard):
     def force_check(self, specific_issue_number: int = None) -> None:
         """Принудительная проверка GitHub без ожидания таймера"""
         self.check_for_test_issues(specific_issue_number) 
+
+    def _baseline_runs(self) -> None:
+        """Помечает текущие workflow runs как уже увиденные, чтобы не слать историю."""
+        if not self.repo_name:
+            return
+        headers = {"Authorization": f"token {self.github_token}"}
+        url = f"https://api.github.com/repos/{self.repo_name}/actions/runs"
+        params = {"per_page": 10}
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            return
+        data = resp.json()
+        for run in data.get("workflow_runs", []):
+            run_id = str(run.get("id"))
+            if run_id:
+                self.seen_runs.add(run_id)

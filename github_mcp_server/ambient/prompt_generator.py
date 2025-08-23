@@ -110,10 +110,8 @@ class PromptGenerator(BaseWizard):
             str: Сгенерированный промпт
         """
         
-        if event.type == EventType.GITHUB_TEST_FAILED:
-            return self.generate_test_failure_prompt(event)
-        elif event.type == EventType.GITHUB_BUILD_FAILED:
-            return self.generate_build_failure_prompt(event)
+        if event.type == EventType.GITHUB_WORKFLOW_EVENT:
+            return self.generate_workflow_event_prompt(event)
         elif event.type == EventType.GITHUB_PR_CREATED:
             return self.generate_pr_analysis_prompt(event)
         elif event.type == EventType.MANUAL_TRIGGER:
@@ -123,38 +121,23 @@ class PromptGenerator(BaseWizard):
         else:
             return self.generate_generic_prompt(event)
     
-    def generate_test_failure_prompt(self, event: Event) -> str:
-        """Генерирует промпт для анализа упавших тестов"""
+    def generate_workflow_event_prompt(self, event: Event) -> str:
+        """Генерирует простой промпт для событий workflow"""
         data = event.data
         
-        # Извлекаем информацию о коммите
-        head_commit = data.get("head_commit", {})
-        commit_author = head_commit.get("author", {}).get("name", "Unknown")
-        commit_message = head_commit.get("message", "No message")
-        commit_sha = head_commit.get("id", "Unknown")[:8]
+        workflow_name = data.get("workflow_name", "Unknown")
+        run_number = data.get("run_number", "?")
+        event_type = data.get("event_type", "изменился")
+        status = data.get("status", "unknown")
+        conclusion = data.get("conclusion")
         
-        return self.prompt_templates["test_failure"].format(
-            repo_name=self.extract_repo_name(data),
-            workflow_name=data.get("workflow_name", "Unknown"),
-            run_number=data.get("run_number", "?"),
-            timestamp=self.format_timestamp(event.timestamp),
-            html_url=data.get("html_url", "N/A"),
-            logs=data.get("logs", "Логи недоступны"),
-            commit_author=commit_author,
-            commit_message=commit_message,
-            commit_sha=commit_sha
-        )
-    
-    def generate_build_failure_prompt(self, event: Event) -> str:
-        """Генерирует промпт для анализа ошибок сборки"""
-        data = event.data
+        # Минимальный прототип: сообщаем только о старте джобы одной строкой
+        if status == "in_progress":
+            prompt = f"🚀 Workflow '{workflow_name}' (run #{run_number}) запущен"
+        else:
+            prompt = f"📊 Workflow '{workflow_name}' (run #{run_number}) {event_type}."
         
-        return self.prompt_templates["build_failure"].format(
-            workflow_name=data.get("workflow_name", "Unknown"),
-            run_number=data.get("run_number", "?"),
-            timestamp=self.format_timestamp(event.timestamp),
-            logs=data.get("logs", "Логи недоступны")
-        )
+        return prompt
     
     def generate_pr_analysis_prompt(self, event: Event) -> str:
         """Генерирует промпт для анализа PR"""

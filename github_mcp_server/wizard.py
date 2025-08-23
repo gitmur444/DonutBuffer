@@ -16,6 +16,7 @@ from integration_test import IntegrationTest
 import sys
 sys.path.append(str(Path(__file__).parent))
 from ambient.ambient_agent import AmbientAgent
+import threading
 
 class DonutAIWizard(BaseWizard):
     """Главный мастер настройки DonutBuffer AI интеграции"""
@@ -68,7 +69,15 @@ class DonutAIWizard(BaseWizard):
             # Настройка завершена успешно
             self.print_success_message()
             
-            # Запускаем cursor-agent
+            # Запускаем Ambient Agent в фоне и PTY bridge для cursor-agent
+            # Запускаем AmbientAgent без регистрации SIGINT, чтобы Ctrl+C вернул в shell
+            # При этом приглушим его собственный вывод, чтобы не мешал TUI
+            import os
+            # Делаем AmbientAgent полностью тихим на всё время работы, чтобы не дёргать TUI
+            os.environ["AMBIENT_SILENT"] = "1"
+            self.start_ambient_agent_background_no_sig()
+
+            # Запускаем cursor-agent напрямую
             self.launch_cursor_agent()
             
         except KeyboardInterrupt:
@@ -95,17 +104,24 @@ class DonutAIWizard(BaseWizard):
         print(f"\n{Colors.BOLD}🚀 AI-powered анализ DonutBuffer готов к работе!{Colors.NC}")
 
     def launch_cursor_agent(self) -> None:
-        """Запуск cursor-agent без стартового промпта"""
-        
+        """Запуск cursor-agent без моста."""
         try:
-            # Запускаем cursor-agent в обычном режиме
             import subprocess
-            subprocess.run(["cursor-agent"])
+            subprocess.run(["cursor-agent"])  # обычный запуск
         except KeyboardInterrupt:
             print(f"\n{Colors.CYAN}👋 До встречи! Используйте 'cursor-agent' для продолжения работы.{Colors.NC}")
         except Exception as e:
             self.print_error(f"Ошибка запуска cursor-agent: {e}")
             print(f"{Colors.CYAN}💡 Запустите вручную: cursor-agent{Colors.NC}")
+
+    def start_ambient_agent_background_no_sig(self) -> None:
+        """Стартует AmbientAgent в фоновом потоке без перехвата Ctrl+C."""
+        try:
+            self._ambient = AmbientAgent(self.donut_dir, install_signal_handlers=False)
+            t = threading.Thread(target=self._ambient.start, daemon=True)
+            t.start()
+        except Exception as e:
+            self.print_warning(f"Не удалось запустить Ambient Agent в фоне: {e}")
     
     def test_ambient_system(self) -> bool:
         """Шаг 5: Тестирование Ambient Agent системы событий"""

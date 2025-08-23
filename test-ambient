@@ -1,0 +1,59 @@
+#!/bin/bash
+# 🧪 Тест Ambient Agent - симуляция workflow события
+
+set -e
+
+echo "🧪 Тестирую Ambient Agent симуляцией workflow события..."
+
+# Активируем venv
+if [ ! -d "venv" ]; then
+    echo "❌ Venv не найден. Запустите сначала ./wizard"
+    exit 1
+fi
+
+source venv/bin/activate
+
+# Симулируем workflow событие
+python -c "
+import sys
+sys.path.append('github_mcp_server')
+from ambient import AmbientAgent
+from ambient.event_system import EventType
+from pathlib import Path
+import time
+
+print('🚀 Создаю Ambient Agent...')
+agent = AmbientAgent(Path.cwd())
+
+print('📡 Симулирую workflow событие...')
+
+# Симулируем что workflow запустился
+agent.event_system.emit_simple(
+    event_type=EventType.GITHUB_WORKFLOW_EVENT,
+    source='test_simulation',
+    data={
+        'workflow_name': 'CI Tests',
+        'run_number': 999,
+        'status': 'in_progress',
+        'conclusion': None,
+        'event_type': 'запущен',
+        'html_url': 'https://github.com/gitmur444/DonutBuffer/actions/runs/999'
+    },
+    priority=3
+)
+
+print('⏳ Ждем обработки события...')
+time.sleep(1)
+
+# Запускаем обработку синхронно
+if agent.event_system.event_queue:
+    event = agent.event_system.event_queue.pop(0)
+    agent.event_system.process_event(event)
+    print('✅ Событие обработано!')
+else:
+    print('❌ Событие не найдено в очереди')
+
+print('\\n🎉 Тест завершен! Проверьте cursor-agent или ~/.cursor/ambient/')
+print('\\n📱 Если cursor-agent не запущен, запустите его командой:')
+print('   cursor-agent')
+" 

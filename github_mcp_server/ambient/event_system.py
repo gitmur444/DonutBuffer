@@ -19,8 +19,7 @@ from core import BaseWizard
 
 class EventType(Enum):
     """Типы событий в системе"""
-    GITHUB_TEST_FAILED = "github_test_failed"
-    GITHUB_BUILD_FAILED = "github_build_failed" 
+    GITHUB_WORKFLOW_EVENT = "github_workflow_event"  # Любые события с workflows
     GITHUB_PR_CREATED = "github_pr_created"
     SYSTEM_ERROR = "system_error"
     MANUAL_TRIGGER = "manual_trigger"
@@ -137,8 +136,7 @@ class EventSystem(BaseWizard):
         else:
             # Показываем только для неизвестных событий
             event_descriptions = {
-                EventType.GITHUB_TEST_FAILED: "🚨 падение тестов в CI/CD",
-                EventType.GITHUB_BUILD_FAILED: "🛠️ ошибку сборки C++",
+                EventType.GITHUB_WORKFLOW_EVENT: "🚀 событие workflow",
                 EventType.GITHUB_PR_CREATED: "📋 новый Pull Request",
                 EventType.MANUAL_TRIGGER: "🎯 ручной запрос анализа",
                 EventType.SYSTEM_TEST: "🧪 системный тест",

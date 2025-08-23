@@ -25,7 +25,7 @@ from .event_handlers import EventHandlers
 class AmbientAgent(BaseWizard):
     """Главный ambient agent для автоматического мониторинга и анализа"""
     
-    def __init__(self, donut_dir: Path):
+    def __init__(self, donut_dir: Path, install_signal_handlers: bool = True):
         self.donut_dir = donut_dir
         self.running = False
         
@@ -44,16 +44,16 @@ class AmbientAgent(BaseWizard):
         # Регистрируем обработчики событий
         self.setup_event_handlers()
         
-        # Настраиваем обработку сигналов для graceful shutdown
-        signal.signal(signal.SIGINT, self.signal_handler)
-        signal.signal(signal.SIGTERM, self.signal_handler)
+        # Настраиваем обработку сигналов для graceful shutdown (опционально)
+        if install_signal_handlers:
+            signal.signal(signal.SIGINT, self.signal_handler)
+            signal.signal(signal.SIGTERM, self.signal_handler)
     
     def setup_event_handlers(self) -> None:
         """Настраивает обработчики событий"""
         
         # Регистрируем обработчики событий
-        self.event_system.register_handler(EventType.GITHUB_TEST_FAILED, self.event_handlers.handle_test_failure)
-        self.event_system.register_handler(EventType.GITHUB_BUILD_FAILED, self.event_handlers.handle_build_failure)
+        self.event_system.register_handler(EventType.GITHUB_WORKFLOW_EVENT, self.event_handlers.handle_workflow_event)
         self.event_system.register_handler(EventType.GITHUB_PR_CREATED, self.event_handlers.handle_pr_created)
         self.event_system.register_handler(EventType.MANUAL_TRIGGER, self.event_handlers.handle_manual_trigger)
         self.event_system.register_handler(EventType.SYSTEM_TEST, self.event_handlers.handle_system_test)

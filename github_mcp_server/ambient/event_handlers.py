@@ -34,38 +34,24 @@ class EventHandlers(BaseWizard):
         self.agent_injector = agent_injector
         self.test_event_processed = False  # Флаг для E2E теста
     
-    def handle_test_failure(self, event: Event) -> None:
-        """Обрабатывает падения тестов"""
+    def handle_workflow_event(self, event: Event) -> None:
+        """Обрабатывает события workflow"""
         workflow_name = event.data.get('workflow_name', 'Unknown')
         run_number = event.data.get('run_number', '?')
+        event_type = event.data.get('event_type', 'изменился')
         
-        self.print_warning(f"🚨 Анализирую падение тестов: {workflow_name} (#{run_number})")
+        self.print_info(f"🚀 Workflow {workflow_name} (#{run_number}) {event_type}")
         
         # Генерируем промпт
         prompt = self.prompt_generator.generate_prompt(event)
         
         # Отправляем в cursor-agent
-        success = self.agent_injector.inject_prompt(prompt, "test_failure")
+        success = self.agent_injector.inject_prompt(prompt, "workflow_event")
         
         if success:
-            self.print_success("✅ Анализ упавших тестов отправлен в cursor-agent")
-            self.print_info("💡 Проверьте cursor-agent для диагностики проблем")
+            self.print_success("✅ Уведомление о workflow отправлено в cursor-agent")
         else:
-            self.print_error("❌ Не удалось отправить анализ в cursor-agent")
-    
-    def handle_build_failure(self, event: Event) -> None:
-        """Обрабатывает ошибки сборки"""
-        workflow_name = event.data.get('workflow_name', 'Unknown')
-        
-        self.print_warning(f"🛠️ Анализирую ошибку сборки: {workflow_name}")
-        
-        prompt = self.prompt_generator.generate_prompt(event)
-        success = self.agent_injector.inject_prompt(prompt, "build_failure")
-        
-        if success:
-            self.print_success("✅ Анализ ошибок сборки отправлен в cursor-agent")
-            self.print_info("💡 Проверьте cursor-agent для исправления компиляции")
-    
+            self.print_error("❌ Не удалось отправить уведомление в cursor-agent")
     def handle_pr_created(self, event: Event) -> None:
         """Обрабатывает создание новых PR"""
         pr_number = event.data.get('pr_number', '?')

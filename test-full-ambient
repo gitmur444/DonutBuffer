@@ -1,0 +1,80 @@
+#!/bin/bash
+# 🚀 Полный тест Ambient Agent с cursor-agent
+
+set -e
+
+echo "🚀 Полный тест Ambient Agent..."
+
+# Проверяем venv
+if [ ! -d "venv" ]; then
+    echo "❌ Venv не найден. Запускаю wizard сначала..."
+    ./wizard
+fi
+
+source venv/bin/activate
+
+echo "🤖 Запускаю cursor-agent в фоне для тестирования..."
+
+# Запускаем cursor-agent в фоне
+cursor-agent "Привет! Ambient agent тест. Жду уведомления о workflow..." --print > /tmp/cursor-agent-output.log 2>&1 &
+CURSOR_PID=$!
+
+echo "✅ Cursor-agent запущен (PID: $CURSOR_PID)"
+echo "⏳ Жду 3 секунды для инициализации..."
+sleep 3
+
+echo "🧪 Симулирую workflow событие..."
+
+# Симулируем событие
+python -c "
+import sys
+sys.path.append('github_mcp_server')
+from ambient import AmbientAgent
+from ambient.event_system import EventType
+from pathlib import Path
+import time
+
+agent = AmbientAgent(Path.cwd())
+
+# Симулируем workflow событие
+agent.event_system.emit_simple(
+    event_type=EventType.GITHUB_WORKFLOW_EVENT,
+    source='full_test',
+    data={
+        'workflow_name': 'DonutBuffer CI',
+        'run_number': 777,
+        'status': 'completed',
+        'conclusion': 'failure',
+        'event_type': 'завершился с ошибкой',
+        'html_url': 'https://github.com/gitmur444/DonutBuffer/actions/runs/777'
+    },
+    priority=3
+)
+
+# Обрабатываем событие
+if agent.event_system.event_queue:
+    event = agent.event_system.event_queue.pop(0)
+    agent.event_system.process_event(event)
+    print('✅ Workflow событие обработано!')
+"
+
+echo "⏳ Жду 2 секунды для отправки сообщения..."
+sleep 2
+
+echo "📊 Результаты:"
+echo "   Cursor-agent лог: /tmp/cursor-agent-output.log"
+echo "   Ambient файлы: ~/.cursor/ambient/"
+
+# Показываем что было в логах cursor-agent
+if [ -f "/tmp/cursor-agent-output.log" ]; then
+    echo ""
+    echo "📄 Последние строки из cursor-agent:"
+    tail -10 /tmp/cursor-agent-output.log || echo "Лог пуст или недоступен"
+fi
+
+# Останавливаем cursor-agent
+kill $CURSOR_PID 2>/dev/null || echo "Cursor-agent уже остановлен"
+
+echo ""
+echo "🎉 Полный тест завершен!"
+echo "💡 Если видите JSON с промптом выше - ambient agent работает!" 
