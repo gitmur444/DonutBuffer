@@ -4,6 +4,10 @@
 Базовые классы и утилиты для DonutBuffer AI Wizard.
 """
 
+from rich.console import Console
+
+console = Console()
+
 class Colors:
     """ANSI цветовые коды для красивого вывода"""
     GREEN = '\033[0;32m'
@@ -19,20 +23,20 @@ class BaseWizard:
     
     def print_step(self, step: int, message: str) -> None:
         """Print step with beautiful formatting."""
-        print(f"\n{Colors.CYAN}🔮 Шаг {step}/5: {Colors.BOLD}{message}{Colors.NC}")
+        console.print(f"\n[cyan]🔮 Шаг {step}/5: [bold]{message}[/bold][/cyan]")
         
     def print_success(self, message: str) -> None:
         """Print success message."""
-        print(f"{Colors.GREEN}✅ {message}{Colors.NC}")
+        console.print(f"[green]✅ {message}[/green]")
         
     def print_error(self, message: str) -> None:
         """Print error message."""
-        print(f"{Colors.RED}❌ {message}{Colors.NC}")
+        console.print(f"[red]❌ {message}[/red]")
         
     def print_warning(self, message: str) -> None:
         """Print warning message."""
-        print(f"{Colors.YELLOW}⚠️  {message}{Colors.NC}")
+        console.print(f"[yellow]⚠️  {message}[/yellow]")
 
     def print_info(self, message: str) -> None:
         """Print info message."""
-        print(f"{Colors.BLUE}ℹ️  {message}{Colors.NC}") 
+        console.print(f"[blue]ℹ️  {message}[/blue]") 

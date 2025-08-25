@@ -7,9 +7,10 @@
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 import sys
 import os
+import json
 
 # Импортируем из родительского пакета
 sys.path.append(str(Path(__file__).parent.parent))
@@ -35,30 +36,196 @@ class AgentInjector(BaseWizard):
         self.print_info(f"🤖 [{source}] Отправляю в cursor-agent...")
         
         try:
-            # Отправляем через CLI в активную сессию (без моста)
-            result = subprocess.run([
-                "cursor-agent", 
-                prompt,  # Без префиксов - как будто пользователь написал
-                "--print"
-            ], 
-            capture_output=True, 
-            text=True, 
-            timeout=30
-            )
-            
-            if result.returncode == 0:
-                self.print_success(f"✅ Промпт отправлен в cursor-agent")
-                return True
-            else:
-                self.print_warning(f"CLI ошибка: {result.stderr}")
-                return self.try_resume_method(prompt, source)
-                
+            # Потоковый режим JSON, выводим сообщения пользователя в рамке
+            return self._run_streaming(prompt)
         except subprocess.TimeoutExpired:
             self.print_warning("Timeout при отправке через CLI")
             return self.try_resume_method(prompt, source)
         except Exception as e:
             self.print_warning(f"Ошибка CLI: {e}")
             return self.try_resume_method(prompt, source)
+
+    def _run_streaming(self, prompt: str) -> bool:
+        """Запускает cursor-agent с --print --output-format stream-json и оформляет вывод.
+
+        - Сообщения пользователя (role=user) печатаются один раз в рамке
+        - Ответ ассистента стримится токенами без переноса строки, с принудительным flush
+        - Итог (type=result) завершает строку
+        """
+        try:
+            with subprocess.Popen(
+                ["cursor-agent", prompt, "--print", "--output-format", "stream-json"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            ) as proc:
+                assert proc.stdout is not None
+                printed_user = False
+                for line in proc.stdout:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # Пытаемся распарсить JSON-событие
+                    obj: Any = None
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        # Некорректная строка — просто печатаем
+                        print(line)
+                        continue
+                    # Пользовательское сообщение (один раз)
+                    if not printed_user and self._is_user_event(obj):
+                        content = self._extract_text(obj)
+                        if content:
+                            print(self._box(content))
+                            printed_user = True
+                        continue
+                    # Поток ассистента — печатаем без перевода строки
+                    if self._is_assistant_event(obj):
+                        chunk = self._extract_text(obj)
+                        if chunk:
+                            print(chunk, end="", flush=True)
+                        continue
+                    # Финальный результат — перенос строки
+                    if obj.get("type") == "result":
+                        print("")
+                        continue
+                    # Остальное: игнорируем или печатаем компактно, если есть текст
+                    text = self._extract_text(obj)
+                    if text:
+                        print(text)
+                return proc.wait() == 0
+        except Exception as e:
+            self.print_warning(f"stream-json ошибка: {e}")
+            return False
+
+    def stream_with_callbacks(
+        self,
+        prompt: str,
+        on_user: Optional[callable] = None,
+        on_chunk: Optional[callable] = None,
+        on_result: Optional[callable] = None,
+    ) -> bool:
+        """Стримит ответ агента, вызывая колбэки для UI.
+
+        - on_user(text): один раз, когда зафиксировано сообщение пользователя
+        - on_chunk(text): фрагменты ответа ассистента по мере поступления
+        - on_result(full_or_final_line): финал запроса
+        """
+        try:
+            with subprocess.Popen(
+                ["cursor-agent", prompt, "--print", "--output-format", "stream-json"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            ) as proc:
+                assert proc.stdout is not None
+                printed_user = False
+                for line in proc.stdout:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    obj: Any = None
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    if not printed_user and self._is_user_event(obj):
+                        content = self._extract_text(obj)
+                        if content and on_user:
+                            on_user(content)
+                        printed_user = True
+                        continue
+                    if self._is_assistant_event(obj):
+                        chunk = self._extract_text(obj)
+                        if chunk and on_chunk:
+                            on_chunk(chunk)
+                        continue
+                    if isinstance(obj, dict) and obj.get("type") == "result":
+                        if on_result:
+                            on_result(obj.get("result") or "")
+                        continue
+                return proc.wait() == 0
+        except Exception as e:
+            self.print_warning(f"stream-json ошибка: {e}")
+            return False
+
+    def _try_print_user_message_box(self, obj: Any) -> bool:
+        """Пробует найти {role:user, content:...} и вывести рамку. Возвращает True если напечатали."""
+        # Прямой формат
+        if isinstance(obj, dict):
+            if obj.get("role") == "user":
+                content = self._extract_text(obj)
+                if content:
+                    print(self._box(content))
+                    return True
+            # Поиск глубже
+            for v in obj.values():
+                if self._try_print_user_message_box(v):
+                    return True
+        elif isinstance(obj, list):
+            for it in obj:
+                if self._try_print_user_message_box(it):
+                    return True
+        return False
+
+    def _extract_text(self, obj: Any) -> str:
+        """Извлекает текст из объекта события максимально толерантно."""
+        if isinstance(obj, dict):
+            # cursor-agent stream-json: message.content: [{type:'text', text:'...'}]
+            if isinstance(obj.get("message"), dict):
+                return self._extract_text(obj["message"])
+            if isinstance(obj.get("content"), str):
+                return obj.get("content")
+            if isinstance(obj.get("content"), list):
+                parts = []
+                for it in obj.get("content"):
+                    t = self._extract_text(it)
+                    if t:
+                        parts.append(t)
+                return "".join(parts)
+            # Некоторые форматы кладут текст в data.text или message.content
+            for key in ("text", "message", "data"):
+                v = obj.get(key)
+                t = self._extract_text(v)
+                if t:
+                    return t
+        elif isinstance(obj, list):
+            parts = [self._extract_text(it) for it in obj]
+            parts = [p for p in parts if p]
+            return "\n".join(parts)
+        elif isinstance(obj, str):
+            return obj
+        return ""
+
+    def _is_user_event(self, obj: Any) -> bool:
+        if isinstance(obj, dict):
+            if obj.get("type") == "user":
+                return True
+            msg = obj.get("message")
+            if isinstance(msg, dict) and msg.get("role") == "user":
+                return True
+        return False
+
+    def _is_assistant_event(self, obj: Any) -> bool:
+        if isinstance(obj, dict):
+            if obj.get("type") == "assistant":
+                return True
+            msg = obj.get("message")
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                return True
+        return False
+
+    def _box(self, text: str) -> str:
+        """Простая рамка для текста пользователя."""
+        lines = text.splitlines() or [""]
+        width = max(len(l) for l in lines)
+        top = "┌" + "─" * (width + 2) + "┐"
+        mid = ["│ " + l.ljust(width) + " │" for l in lines]
+        bot = "└" + "─" * (width + 2) + "┘"
+        return "\n".join([top, *mid, bot])
     
     def try_resume_method(self, prompt: str, source: str) -> bool:
         """Пытается найти активную сессию и отправить туда"""

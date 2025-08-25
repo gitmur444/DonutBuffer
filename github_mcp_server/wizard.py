@@ -11,12 +11,15 @@ from dependencies import DependencyChecker
 from github_setup import GitHubSetup
 from mcp_setup import MCPSetup
 from integration_test import IntegrationTest
+from rich.console import Console
 
 # Импортируем Ambient Agent для тестирования
 import sys
 sys.path.append(str(Path(__file__).parent))
 from ambient.ambient_agent import AmbientAgent
 import threading
+
+console = Console()
 
 class DonutAIWizard(BaseWizard):
     """Главный мастер настройки DonutBuffer AI интеграции"""
@@ -69,39 +72,34 @@ class DonutAIWizard(BaseWizard):
             # Настройка завершена успешно
             self.print_success_message()
             
-            # Запускаем Ambient Agent в фоне и PTY bridge для cursor-agent
-            # Запускаем AmbientAgent без регистрации SIGINT, чтобы Ctrl+C вернул в shell
-            # При этом приглушим его собственный вывод, чтобы не мешал TUI
+            # Запускаем Ambient Agent в фоне (тихо)
             import os
-            # Делаем AmbientAgent полностью тихим на всё время работы, чтобы не дёргать TUI
             os.environ["AMBIENT_SILENT"] = "1"
             self.start_ambient_agent_background_no_sig()
-
-            # Запускаем cursor-agent напрямую
-            self.launch_cursor_agent()
+            # Запуск простого интерактивного режима
+            from .ambient.interactive_simple import run_interactive
+            run_interactive()
             
         except KeyboardInterrupt:
-            print(f"\n{Colors.YELLOW}⚠️  Настройка прервана пользователем{Colors.NC}")
+            console.print(f"\n[yellow]⚠️  Настройка прервана пользователем[/yellow]")
         except Exception as e:
             self.print_error(f"Неожиданная ошибка: {e}")
 
     def print_header(self) -> None:
         """Печать заголовка мастера"""
-        print(f"{Colors.BOLD}{Colors.BLUE}")
-        print("🧙‍♂️ ════════════════════════════════════════════════════════════")
-        print("   DonutBuffer AI Wizard - Магический помощник разработчика")
-        print("════════════════════════════════════════════════════════════")
-        print(f"{Colors.NC}")
+        console.print("[bold blue]🧙‍♂️ ════════════════════════════════════════════════════════════[/bold blue]")
+        console.print("[bold blue]   DonutBuffer AI Wizard - Магический помощник разработчика[/bold blue]")
+        console.print("[bold blue]════════════════════════════════════════════════════════════[/bold blue]")
 
     def print_success_message(self) -> None:
         """Печать сообщения об успешном завершении"""
-        print(f"\n{Colors.GREEN}🎉 Настройка DonutBuffer AI Wizard завершена успешно!{Colors.NC}")
-        print(f"{Colors.CYAN}💡 Интеграция с GitHub настроена. Теперь вы можете:{Colors.NC}")
-        print(f"   • Анализировать производительность ring buffer")
-        print(f"   • Отслеживать падения тестов в CI/CD")
-        print(f"   • Получать рекомендации по оптимизации C++ кода")
-        print(f"   • Мониторить GitHub Actions и Pull Requests")
-        print(f"\n{Colors.BOLD}🚀 AI-powered анализ DonutBuffer готов к работе!{Colors.NC}")
+        console.print(f"\n[green]🎉 Настройка DonutBuffer AI Wizard завершена успешно![/green]")
+        console.print(f"[cyan]💡 Интеграция с GitHub настроена. Теперь вы можете:[/cyan]")
+        console.print(f"   • Анализировать производительность ring buffer")
+        console.print(f"   • Отслеживать падения тестов в CI/CD")
+        console.print(f"   • Получать рекомендации по оптимизации C++ кода")
+        console.print(f"   • Мониторить GitHub Actions и Pull Requests")
+        console.print(f"\n[bold]🚀 AI-powered анализ DonutBuffer готов к работе![/bold]")
 
     def launch_cursor_agent(self) -> None:
         """Запуск cursor-agent без моста."""
@@ -109,33 +107,33 @@ class DonutAIWizard(BaseWizard):
             import subprocess
             subprocess.run(["cursor-agent"])  # обычный запуск
         except KeyboardInterrupt:
-            print(f"\n{Colors.CYAN}👋 До встречи! Используйте 'cursor-agent' для продолжения работы.{Colors.NC}")
+            console.print(f"\n[cyan]👋 До встречи! Используйте 'cursor-agent' для продолжения работы.[/cyan]")
         except Exception as e:
             self.print_error(f"Ошибка запуска cursor-agent: {e}")
-            print(f"{Colors.CYAN}💡 Запустите вручную: cursor-agent{Colors.NC}")
+            console.print(f"[cyan]💡 Запустите вручную: cursor-agent[/cyan]")
 
     def start_ambient_agent_background_no_sig(self) -> None:
         """Стартует AmbientAgent в фоновом потоке без перехвата Ctrl+C."""
         try:
-            import os, sys
+            import os
             self._ambient = AmbientAgent(self.donut_dir, install_signal_handlers=False)
 
             def _runner():
-                # Полностью подавляем вывод фонового агента, чтобы не мешать TUI
-                devnull = None
-                prev_out, prev_err = sys.stdout, sys.stderr
-                try:
-                    devnull = open(os.devnull, 'w')
-                    sys.stdout = devnull
-                    sys.stderr = devnull
-                    self._ambient.start()
-                finally:
-                    try:
-                        if devnull:
-                            devnull.close()
-                    except Exception:
-                        pass
-                    sys.stdout, sys.stderr = prev_out, prev_err
+                # Полностью глушим любые принты фоновых компонентов
+                def _silence(x):
+                    for name in ("print_info", "print_success", "print_warning", "print_error"):
+                        if hasattr(x, name):
+                            try:
+                                setattr(x, name, lambda *a, **k: None)
+                            except Exception:
+                                pass
+                _silence(self._ambient)
+                # Также глушим дочерние компоненты, если уже созданы
+                for comp_name in ("github_monitor", "event_system", "prompt_generator", "agent_injector", "event_handlers"):
+                    comp = getattr(self._ambient, comp_name, None)
+                    if comp is not None:
+                        _silence(comp)
+                self._ambient.start()
 
             t = threading.Thread(target=_runner, daemon=True)
             t.start()
@@ -165,6 +163,10 @@ class DonutAIWizard(BaseWizard):
             self.print_info("💡 Ambient Agent может не работать, но основная интеграция готова")
             return False
 
-if __name__ == "__main__":
+def main():
+    """Точка входа для запуска мастера"""
     wizard = DonutAIWizard()
-    wizard.run() 
+    wizard.run()
+
+if __name__ == "__main__":
+    main() 

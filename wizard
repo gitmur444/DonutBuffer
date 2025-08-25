@@ -1,3 +1,26 @@
 #!/bin/bash
-# 🧙‍♂️ DonutBuffer AI Wizard - короткая команда
-exec ./run-wizard "$@" 
+# 🧙‍♂️ DonutBuffer AI Wizard Launcher
+# Автоматически активирует venv и запускает мастера
+
+set -e
+
+# Проверяем что мы в правильной директории
+if [ ! -f "github_mcp_server/wizard.py" ]; then
+    echo "❌ Ошибка: Запустите скрипт из корня DonutBuffer проекта"
+    exit 1
+fi
+
+# Подготовка окружения (тихо, если все готово)
+if [ ! -d "venv" ]; then
+    echo "🔧 Создаю виртуальное окружение..."
+    python3 -m venv venv
+fi
+
+source venv/bin/activate
+
+if [ ! -f "venv/.requirements_installed" ]; then
+    echo "📦 Устанавливаю зависимости..."
+    pip install -r github_mcp_server/requirements.txt
+    touch venv/.requirements_installed
+fi
+cd github_mcp_server && python wizard.py 
