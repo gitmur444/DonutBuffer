@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.core.env import EnvManager
+from src.core.env_manager import EnvManager
 from .check_dependencies import run_dependencies_check
 from .check_github import run_github_access_check
 from .check_mcp import run_mcp_config_check

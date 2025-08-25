@@ -6,8 +6,8 @@
 
 import subprocess
 import requests
-from src.core.base import BaseWizard
-from src.core.env import EnvManager
+from src.core.base_wizard import BaseWizard
+from src.core.env_manager import EnvManager
 
 class IntegrationTest(BaseWizard):
     """Тестирование интеграции"""

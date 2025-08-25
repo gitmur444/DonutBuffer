@@ -5,9 +5,9 @@
 """
 
 from pathlib import Path
-from src.core.base import BaseWizard, Colors
-from src.core.env import EnvManager
-from src.core.dependencies import DependencyChecker
+from src.core.base_wizard import BaseWizard, Colors
+from src.core.env_manager import EnvManager
+from src.core.dependency_checker import DependencyChecker
 from src.setup.github_setup import GitHubSetup
 from src.setup.mcp_setup import MCPSetup
 from tests.integration.test_integration import IntegrationTest

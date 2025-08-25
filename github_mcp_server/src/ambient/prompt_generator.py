@@ -11,7 +11,7 @@ from pathlib import Path
 
 # Импортируем из родительского пакета
 sys.path.append(str(Path(__file__).parent.parent))
-from ..core.base import BaseWizard
+from ..core.base_wizard import BaseWizard
 from .event_system import Event, EventType
 
 class PromptGenerator(BaseWizard):

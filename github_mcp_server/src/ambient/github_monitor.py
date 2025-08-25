@@ -13,8 +13,8 @@ from pathlib import Path
 
 # Импортируем из родительского пакета
 sys.path.append(str(Path(__file__).parent.parent))
-from ..core.base import BaseWizard
-from ..core.env import EnvManager
+from ..core.base_wizard import BaseWizard
+from ..core.env_manager import EnvManager
 from .event_system import EventSystem, EventType
 
 class GitHubMonitor(BaseWizard):
