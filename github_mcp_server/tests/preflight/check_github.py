@@ -1,4 +1,4 @@
-from src.core.env import EnvManager
+from src.core.env_manager import EnvManager
 from src.setup.github_setup import GitHubSetup
 
 

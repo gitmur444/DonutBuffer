@@ -6,7 +6,7 @@
 
 import json
 from pathlib import Path
-from ..core.base import BaseWizard
+from ..core.base_wizard import BaseWizard
 
 class MCPSetup(BaseWizard):
     """Настройка MCP Server"""

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from src.core.dependencies import DependencyChecker
-from src.core.env import EnvManager
+from src.core.dependency_checker import DependencyChecker
+from src.core.env_manager import EnvManager
 
 
 def run_dependencies_check(donut_dir: Path) -> tuple[bool, str]:

@@ -26,7 +26,7 @@ from rich.panel import Panel
 
 # Add parent directory to sys.path for absolute imports
 sys.path.append(str(Path(__file__).parent.parent))
-from ..core.base import Colors
+from ..core.base_wizard import Colors
 
 console = Console()
 stop_event = threading.Event()

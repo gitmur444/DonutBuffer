@@ -6,8 +6,8 @@
 
 import getpass
 import requests
-from ..core.base import BaseWizard, Colors
-from ..core.env import EnvManager
+from ..core.base_wizard import BaseWizard, Colors
+from ..core.env_manager import EnvManager
 
 class GitHubSetup(BaseWizard):
     """Настройка GitHub интеграции"""
