@@ -15,7 +15,7 @@ from pathlib import Path
 
 # Импортируем из родительского пакета
 sys.path.append(str(Path(__file__).parent.parent))
-from core import BaseWizard
+from ..core.base import BaseWizard
 
 class EventType(Enum):
     """Типы событий в системе"""

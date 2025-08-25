@@ -12,8 +12,8 @@ from typing import Optional
 
 # Импортируем из родительского пакета
 sys.path.append(str(Path(__file__).parent.parent))
-from core import BaseWizard
-from env_manager import EnvManager
+from ..core.base import BaseWizard
+from ..core.env import EnvManager
 
 # Импортируем ambient компоненты
 from .event_system import EventSystem, Event, EventType

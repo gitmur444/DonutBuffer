@@ -6,7 +6,7 @@
 
 import json
 from pathlib import Path
-from core import BaseWizard
+from ..core.base import BaseWizard
 
 class MCPSetup(BaseWizard):
     """Настройка MCP Server"""
@@ -28,7 +28,7 @@ class MCPSetup(BaseWizard):
     
     def create_mcp_config(self) -> bool:
         """Создание конфигурации MCP"""
-        mcp_config_path = self.project_dir / "github_mcp_server" / "mcp_config.json"
+        mcp_config_path = self.project_dir / "github_mcp_server" / "config" / "mcp_config.json"
         
         # Создаем папку если не существует
         mcp_config_path.parent.mkdir(parents=True, exist_ok=True)

@@ -26,7 +26,7 @@ from rich.panel import Panel
 
 # Add parent directory to sys.path for absolute imports
 sys.path.append(str(Path(__file__).parent.parent))
-from core import Colors
+from ..core.base import Colors
 
 console = Console()
 stop_event = threading.Event()
@@ -122,6 +122,10 @@ def stream_agent_response(prompt_text):
 
 def run_interactive():
     """Main interactive loop with prompt_toolkit"""
+    # Если stdout не TTY (например, запуск через пайп), не запускаем TUI
+    if not sys.stdout.isatty():
+        console.print("[yellow]TUI отключен (не TTY). Запустите ./wizard напрямую в терминале.[/yellow]")
+        return
     # Set up signal handler for Ctrl+C
     signal.signal(signal.SIGINT, signal_handler)
     

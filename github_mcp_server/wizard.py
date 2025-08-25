@@ -5,18 +5,18 @@
 """
 
 from pathlib import Path
-from core import BaseWizard, Colors
-from env_manager import EnvManager
-from dependencies import DependencyChecker
-from github_setup import GitHubSetup
-from mcp_setup import MCPSetup
-from integration_test import IntegrationTest
+from src.core.base import BaseWizard, Colors
+from src.core.env import EnvManager
+from src.core.dependencies import DependencyChecker
+from src.setup.github_setup import GitHubSetup
+from src.setup.mcp_setup import MCPSetup
+from tests.integration.test_integration import IntegrationTest
 from rich.console import Console
 
 # Импортируем Ambient Agent для тестирования
 import sys
 sys.path.append(str(Path(__file__).parent))
-from ambient.ambient_agent import AmbientAgent
+from src.ambient.ambient_agent import AmbientAgent
 import threading
 
 console = Console()
@@ -47,26 +47,12 @@ class DonutAIWizard(BaseWizard):
         self.print_header()
         
         try:
-            # Выполняем все 5 шагов
-            if not self.dependency_checker.check_dependencies():
-                self.print_error("Установите недостающие зависимости и запустите снова")
-                return
-                
-            if not self.github_setup.setup_github_token():
-                self.print_error("Настройте GitHub токен и запустите снова")
-                return
-                
-            if not self.mcp_setup.setup_github_mcp():
-                self.print_error("Ошибка настройки MCP Server")
-                return
-                
-            if not self.integration_test.test_integration():
-                self.print_warning("Интеграция работает с предупреждениями")
-            
-            if not self.test_ambient_system():
-                self.print_error("❌ E2E тест Ambient Agent провален!")
-                self.print_error("Система неработоспособна. Cursor-agent НЕ будет запущен.")
-                self.print_info("💡 Проверьте GitHub API доступность и повторите настройку")
+            # Предзапусковые проверки (1–5) через preflight runner
+            from tests.preflight.runner import run_preflight
+            ok, _ = run_preflight(self.donut_dir)
+            if not ok:
+                self.print_error("Предзапусковые проверки провалены")
+                self.print_info("💡 Исправьте замечания и запустите мастер снова")
                 return
             
             # Настройка завершена успешно
@@ -77,7 +63,7 @@ class DonutAIWizard(BaseWizard):
             os.environ["AMBIENT_SILENT"] = "1"
             self.start_ambient_agent_background_no_sig()
             # Запуск простого интерактивного режима
-            from .ambient.interactive_simple import run_interactive
+            from src.ui.interactive_simple import run_interactive
             run_interactive()
             
         except KeyboardInterrupt:

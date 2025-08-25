@@ -6,7 +6,7 @@
 
 import os
 from pathlib import Path
-from core import BaseWizard
+from .base import BaseWizard
 
 class EnvManager(BaseWizard):
     """Менеджер для работы с .env файлами и переменными окружения"""

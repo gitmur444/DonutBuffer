@@ -6,7 +6,7 @@
 
 import sys
 import subprocess
-from core import BaseWizard
+from .base import BaseWizard
 
 class DependencyChecker(BaseWizard):
     """Проверка и установка зависимостей"""
