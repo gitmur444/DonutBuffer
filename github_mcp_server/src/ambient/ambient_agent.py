@@ -64,9 +64,7 @@ class AmbientAgent(BaseWizard):
         """Запускает ambient agent"""
         self.print_info("🤖 Запускаю DonutBuffer Ambient Agent...")
         
-        # Проверяем готовность
-        if not self.pre_flight_check():
-            return
+        # Префлайт-проверки выполняются в ./wizard через tests/preflight/runner
         
         self.running = True
         
@@ -90,30 +88,7 @@ class AmbientAgent(BaseWizard):
         finally:
             self.stop()
     
-    def pre_flight_check(self) -> bool:
-        """Проверяет готовность к запуску"""
-        all_good = True
-        
-        # Проверяем cursor-agent
-        if not self.agent_injector.check_cursor_agent_availability():
-            self.print_warning("⚠️ cursor-agent недоступен")
-            all_good = False
-        
-        # Проверяем GitHub токен  
-        github_token = self.env_manager.get_env_var("GITHUB_TOKEN")
-        if not github_token:
-            self.print_warning("⚠️ GitHub токен не найден")
-            all_good = False
-        
-
-        
-        if all_good:
-            self.print_success("✅ Pre-flight проверка пройдена")
-        else:
-            self.print_error("❌ Pre-flight проверка не пройдена")
-            self.print_info("💡 Запустите ./wizard для настройки")
-        
-        return all_good
+    # Префлайт-проверка перенесена в tests/preflight/runner.py
     
     def main_loop(self) -> None:
         """Основной цикл ambient agent"""

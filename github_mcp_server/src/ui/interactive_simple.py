@@ -8,7 +8,7 @@ Interactive CLI using prompt_toolkit with dynamic single-line frame prompt.
 - Adjusts to terminal resize, wrapping content accordingly
 """
 
-import asyncio
+# Removed asyncio import as async functionality was removed
 import json
 import os
 import signal
@@ -22,7 +22,7 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
-from prompt_toolkit.layout.controls import BufferControl
+from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.containers import VSplit
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.processors import BeforeInput
@@ -71,7 +71,7 @@ class DynamicPromptUI:
         def _(event) -> None:
             event.app.exit(result=self.buffer.text)
 
-        @self.kb.add("s-enter")
+        @self.kb.add("c-j")
         def _(event) -> None:
             event.current_buffer.insert_text("\n")
 
@@ -169,14 +169,26 @@ def _stream_agent_response(prompt_text: str) -> None:
 
 
 def run_interactive() -> None:
-    ui = DynamicPromptUI()
-    result = ui.run()
-    if result is None:
-        print("Ввод отменён")
-        return
-    if result.strip():
+    while True:
+        ui = DynamicPromptUI()
+        try:
+            result = ui.run()
+        except KeyboardInterrupt:
+            print("\nВыход...")
+            break
+
+        if result is None:
+            print("Выход...")
+            break
+
+        user_text = result.strip()
+        if not user_text:
+            # Пустой ввод — просто перерисовать новый промпт
+            continue
+
         print()
-        _stream_agent_response(result.strip())
+        _stream_agent_response(user_text)
+        # После ответа — цикл повторится и снова откроет рамку ввода
 
 
 if __name__ == "__main__":

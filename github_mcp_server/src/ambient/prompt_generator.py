@@ -1,7 +1,8 @@
 """
-💬 Prompt Generator - Генерация промптов для анализа
+💬 Prompt Generator - Упрощённый: только анализ упавшей CI джобы
 
-Создает структурированные промпты для различных типов анализа.
+Генерирует промпт ТОЛЬКО для событий workflow, завершившихся с ошибкой.
+Все остальные типы событий возвращают пустую строку.
 """
 
 import time
@@ -15,167 +16,49 @@ from ..core.base_wizard import BaseWizard
 from .event_system import Event, EventType
 
 class PromptGenerator(BaseWizard):
-    """Генератор промптов для анализа событий"""
-    
-    def __init__(self):
-        self.prompt_templates = self.load_templates()
-        
-    def load_templates(self) -> Dict[str, str]:
-        """Загружает шаблоны промптов"""
-        return {
-            "test_failure": """🔍 **АНАЛИЗ УПАВШИХ ТЕСТОВ DONUTBUFFER**
-
-**Репозиторий:** {repo_name}
-**Workflow:** {workflow_name} (Run #{run_number})
-**Время:** {timestamp}
-**URL:** {html_url}
-
-**Упавшие задачи:**
-```
-{logs}
-```
-
-**Последний коммит:**
-- **Автор:** {commit_author}
-- **Сообщение:** {commit_message}
-- **SHA:** {commit_sha}
-
-**ЗАДАЧА:**
-1. Проанализируй причины падения тестов
-2. Определи связь с последними изменениями в C++ коде
-3. Проверь влияние на производительность ring buffer
-4. Предложи конкретные исправления
-5. Оцени влияние на lockfree vs mutex реализации
-
-**ФОКУС:** DonutBuffer C++ ring buffer, многопоточность, производительность""",
-
-            "build_failure": """🛠️ **АНАЛИЗ ОШИБОК СБОРКИ DONUTBUFFER**
-
-**Workflow:** {workflow_name} (Run #{run_number})
-**Время:** {timestamp}
-
-**Ошибки сборки:**
-```
-{logs}
-```
-
-**ЗАДАЧА:**
-1. Определи причины ошибок компиляции
-2. Проверь совместимость с C++20
-3. Проанализируй проблемы с зависимостями
-4. Предложи исправления для CMake конфигурации
-
-**ФОКУС:** C++20, CMake, многопоточность, template метапрограммирование""",
-
-            "pr_analysis": """📋 **АНАЛИЗ НОВОГО PULL REQUEST**
-
-**PR #{pr_number}:** {pr_title}
-**Автор:** {author}
-**URL:** {pr_url}
-
-**ЗАДАЧА:**
-1. Проанализируй изменения в контексте DonutBuffer архитектуры
-2. Оцени влияние на производительность ring buffer
-3. Проверь соответствие паттернам lockfree программирования
-4. Предложи улучшения для кода review
-
-**ФОКУС:** Архитектура, производительность, best practices C++""",
-
-            "manual_analysis": """🎯 **РУЧНОЙ АНАЛИЗ DONUTBUFFER**
-
-**Запрошенный анализ:** {analysis_type}
-**Данные:**
-```
-{data}
-```
-
-**ЗАДАЧА:** 
-Проведи глубокий анализ с фокусом на:
-- C++ ring buffer оптимизацию
-- Многопоточное программирование  
-- Lockfree vs mutex performance
-- Memory ordering и cache efficiency
-
-**КОНТЕКСТ:** DonutBuffer - высокопроизводительный ring buffer проект"""
-        }
+    """Генератор промптов: только для упавших workflow."""
     
     def generate_prompt(self, event: Event) -> str:
-        """
-        Генерирует промпт на основе события
-        
-        Args:
-            event: Событие для анализа
-            
-        Returns:
-            str: Сгенерированный промпт
-        """
-        
-        if event.type == EventType.GITHUB_WORKFLOW_EVENT:
-            return self.generate_workflow_event_prompt(event)
-        elif event.type == EventType.GITHUB_PR_CREATED:
-            return self.generate_pr_analysis_prompt(event)
-        elif event.type == EventType.MANUAL_TRIGGER:
-            return self.generate_manual_analysis_prompt(event)
-        elif event.type == EventType.GITHUB_ISSUE_TEST:
-            return self.generate_test_issue_prompt(event)
-        else:
-            return self.generate_generic_prompt(event)
+        """Возвращает текст промпта или пустую строку, если промпт не нужен."""
+        if event.type != EventType.GITHUB_WORKFLOW_EVENT:
+            return ""
+        return self.generate_workflow_event_prompt(event)
     
     def generate_workflow_event_prompt(self, event: Event) -> str:
-        """Генерирует простой промпт для событий workflow"""
+        """Промпт ТОЛЬКО для упавших workflow (conclusion == failure)."""
         data = event.data
-        
+        conclusion = str(data.get("conclusion") or "").lower()
+        if conclusion not in ("failure", "failed", "cancelled"):
+            return ""
+
         workflow_name = data.get("workflow_name", "Unknown")
         run_number = data.get("run_number", "?")
-        event_type = data.get("event_type", "изменился")
-        status = data.get("status", "unknown")
-        conclusion = data.get("conclusion")
-        
-        # Минимальный прототип: сообщаем только о старте джобы одной строкой
-        if status == "in_progress":
-            prompt = f"🚀 Workflow '{workflow_name}' (run #{run_number}) запущен"
-        else:
-            prompt = f"📊 Workflow '{workflow_name}' (run #{run_number}) {event_type}."
-        
-        return prompt
-    
-    def generate_pr_analysis_prompt(self, event: Event) -> str:
-        """Генерирует промпт для анализа PR"""
-        data = event.data
-        
-        return self.prompt_templates["pr_analysis"].format(
-            pr_number=data.get("pr_number", "?"),
-            pr_title=data.get("pr_title", "No title"),
-            author=data.get("author", "Unknown"),
-            pr_url=data.get("pr_url", "N/A")
+        html_url = data.get("html_url", "")
+        head = data.get("head_commit", {}) or {}
+        commit_author = (head.get("author") or {}).get("name") or head.get("author", "?")
+        commit_message = head.get("message", "")
+        commit_sha = head.get("id", "")[:7]
+
+        return (
+            "🛠️ Сборка/тесты упали\n\n"
+            f"Workflow: {workflow_name} (Run #{run_number})\n"
+            f"URL: {html_url}\n\n"
+            "Последний коммит:\n"
+            f"- Автор: {commit_author}\n"
+            f"- Сообщение: {commit_message}\n"
+            f"- SHA: {commit_sha}\n\n"
+            "Задача: определи причину падения и предложи исправления."
         )
+    
+    # Остальные генераторы больше не используются. Возвращаем пустые строки.
+    def generate_pr_analysis_prompt(self, event: Event) -> str:
+        return ""
     
     def generate_manual_analysis_prompt(self, event: Event) -> str:
-        """Генерирует промпт для ручного анализа"""
-        data = event.data
-        
-        return self.prompt_templates["manual_analysis"].format(
-            analysis_type=data.get("type", "General analysis"),
-            data=data.get("content", "No additional data")
-        )
+        return ""
     
     def generate_generic_prompt(self, event: Event) -> str:
-        """Генерирует общий промпт для неизвестных типов событий"""
-        return f"""🤖 **АНАЛИЗ СОБЫТИЯ DONUTBUFFER**
-
-**Тип события:** {event.type.value}
-**Источник:** {event.source}
-**Время:** {self.format_timestamp(event.timestamp)}
-
-**Данные:**
-```
-{self.format_event_data(event.data)}
-```
-
-**ЗАДАЧА:** 
-Проанализируй это событие в контексте проекта DonutBuffer.
-Фокус на C++ ring buffer, производительности и многопоточности.
-"""
+        return ""
     
     def extract_repo_name(self, data: Dict) -> str:
         """Извлекает имя репозитория из данных"""
@@ -211,59 +94,8 @@ class PromptGenerator(BaseWizard):
         
         return "\n".join(lines)
     
-    def create_custom_prompt(self, 
-                           analysis_type: str, 
-                           content: str, 
-                           focus_areas: List[str] = None) -> str:
-        """
-        Создает кастомный промпт для ручного анализа
-        
-        Args:
-            analysis_type: Тип анализа
-            content: Контент для анализа
-            focus_areas: Области фокуса
-        """
-        
-        focus_text = ""
-        if focus_areas:
-            focus_text = f"\n**Области фокуса:** {', '.join(focus_areas)}"
-        
-        return f"""🎯 **КАСТОМНЫЙ АНАЛИЗ DONUTBUFFER**
-
-**Тип анализа:** {analysis_type}
-**Время:** {time.strftime("%Y-%m-%d %H:%M:%S")}
-
-**Контент для анализа:**
-```
-{content}
-```
-
-**ЗАДАЧА:**
-Проведи детальный анализ с учетом специфики DonutBuffer проекта.
-Фокусируйся на C++ производительности, ring buffer архитектуре,
-lockfree vs mutex реализациях.{focus_text}
-
-**КОНТЕКСТ:** DonutBuffer - высокопроизводительный C++ ring buffer"""
-        
-        return template.format(**data)
+    def create_custom_prompt(self, analysis_type: str, content: str, focus_areas: List[str] = None) -> str:
+        return ""
     
     def generate_test_issue_prompt(self, event: Event) -> str:
-        """Генерирует промпт для E2E тестового события"""
-        issue_number = event.data.get('issue_number', '?')
-        title = event.data.get('title', 'No title')
-        
-        return f"""🔬 **E2E ТЕСТ AMBIENT AGENT СИСТЕМЫ**
-
-**GitHub Issue:** #{issue_number}
-**Заголовок:** {title}
-**Время:** {self.format_timestamp(event.timestamp)}
-
-✅ **ТЕСТ УСПЕШЕН!**
-
-Ambient Agent система событий работает корректно:
-- GitHub API мониторинг ✅
-- Система событий ✅  
-- Обработчики событий ✅
-- Генерация промптов ✅
-
-DonutBuffer AI готов к работе! 🚀""" 
+        return ""
