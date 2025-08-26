@@ -45,8 +45,19 @@ class DonutAIWizard(BaseWizard):
         
         try:
             # Предзапусковые проверки (1–5) через preflight runner
+            # Одновременно собираем полный текстовый лог для передачи в TUI как историю
             from tests.preflight.runner import run_preflight
-            ok, _ = run_preflight(self.donut_dir)
+            from io import StringIO
+            import contextlib
+            import re
+
+            log_capture = StringIO()
+            with contextlib.redirect_stdout(log_capture):
+                ok, _ = run_preflight(self.donut_dir)
+            preflight_text = log_capture.getvalue()
+            # Уберём ANSI управляющие последовательности, чтобы не было артефактов в TUI истории
+            ansi_escape = re.compile(r"\x1B[@-_][0-?]*[ -/]*[@-~]")
+            preflight_text = ansi_escape.sub("", preflight_text)
             if not ok:
                 self.print_error("Предзапусковые проверки провалены")
                 self.print_info("💡 Исправьте замечания и запустите мастер снова")
@@ -61,7 +72,7 @@ class DonutAIWizard(BaseWizard):
             self.start_ambient_agent_background_no_sig()
             # Запуск простого интерактивного режима
             from src.ui.interactive_simple import run_interactive
-            run_interactive()
+            run_interactive(preflight_text)
             
         except KeyboardInterrupt:
             console.print(f"\n[yellow]⚠️  Настройка прервана пользователем[/yellow]")
