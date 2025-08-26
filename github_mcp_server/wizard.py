@@ -47,24 +47,24 @@ class DonutAIWizard(BaseWizard):
             # Предзапусковые проверки (1–5) через preflight runner
             # Одновременно собираем полный текстовый лог для передачи в TUI как историю
             from tests.preflight.runner import run_preflight
-            from io import StringIO
-            import contextlib
             import re
-
-            log_capture = StringIO()
-            with contextlib.redirect_stdout(log_capture):
-                ok, _ = run_preflight(self.donut_dir)
-            preflight_text = log_capture.getvalue()
-            # Уберём ANSI управляющие последовательности, чтобы не было артефактов в TUI истории
-            ansi_escape = re.compile(r"\x1B[@-_][0-?]*[ -/]*[@-~]")
-            preflight_text = ansi_escape.sub("", preflight_text)
+            # накапливаем динамическую историю префлайта
+            preflight_lines: list[str] = []
+            def on_progress(msg: str) -> None:
+                # очищаем ANSI и добавляем строку (кроме кратких статусов ok/fail)
+                ansi_escape = re.compile(r"\x1B[@-_][0-?]*[ -/]*[@-~]")
+                clean = ansi_escape.sub("", msg).strip()
+                if re.fullmatch(r"(?i)(dependencies|github|mcp|integration|ambient)\s*:\s*(ok|fail)", clean):
+                    return
+                if clean:
+                    preflight_lines.append(clean)
+                # обновлять TUI будем при запуске, передаём текущий снимок истории
+            ok, _ = run_preflight(self.donut_dir, on_progress=on_progress)
+            preflight_text = "\n".join(preflight_lines)
             if not ok:
                 self.print_error("Предзапусковые проверки провалены")
                 self.print_info("💡 Исправьте замечания и запустите мастер снова")
                 return
-            
-            # Настройка завершена успешно
-            self.print_success_message()
             
             # Запускаем Ambient Agent в фоне (тихо)
             import os
@@ -82,20 +82,12 @@ class DonutAIWizard(BaseWizard):
             traceback.print_exc()
 
     def print_header(self) -> None:
-        """Печать заголовка мастера"""
-        console.print("[bold blue]🧙‍♂️ ════════════════════════════════════════════════════════════[/bold blue]")
-        console.print("[bold blue]   DonutBuffer AI Wizard - Магический помощник разработчика[/bold blue]")
-        console.print("[bold blue]════════════════════════════════════════════════════════════[/bold blue]")
+        """Печать заголовка мастера (коротко, без рамки)."""
+        console.print("[bold blue]DonutBuffer AI Wizard - Магический помощник разработчика[/bold blue]")
 
     def print_success_message(self) -> None:
-        """Печать сообщения об успешном завершении"""
-        console.print(f"\n[green]🎉 Настройка DonutBuffer AI Wizard завершена успешно![/green]")
-        console.print(f"[cyan]💡 Интеграция с GitHub настроена. Теперь вы можете:[/cyan]")
-        console.print(f"   • Анализировать производительность ring buffer")
-        console.print(f"   • Отслеживать падения тестов в CI/CD")
-        console.print(f"   • Получать рекомендации по оптимизации C++ кода")
-        console.print(f"   • Мониторить GitHub Actions и Pull Requests")
-        console.print(f"\n[bold]🚀 AI-powered анализ DonutBuffer готов к работе![/bold]")
+        """Убрано по требованиям дизайна (без итогового сообщения)."""
+        return
 
     def launch_cursor_agent(self) -> None:
         """Запуск cursor-agent без моста."""

@@ -32,22 +32,6 @@ from prompt_toolkit.widgets import Frame
 
 PLACEHOLDER = "Plan, search, build anything"
 
-
-def _build_preflight_text() -> str:
-    lines = [
-        "",
-        "Preflight checks:",
-        "  [1/5] Dependencies: OK",
-        "  [2/5] GitHub token: OK",
-        "  [3/5] MCP config: OK",
-        "  [4/5] Integration: OK",
-        "  [5/5] Ambient: OK",
-        "",
-        "Type below. Ctrl+J → newline, Enter → submit.",
-        "",
-    ]
-    return "\n".join(lines)
-
 class DynamicPromptUI:
     def __init__(self) -> None:
         self.placeholder_active = True
@@ -180,29 +164,27 @@ class DynamicPromptUI:
         return result
 
 
-def _stream_agent_response(prompt_text: str) -> None:
-    """Optional: example of streaming agent output using cursor-agent CLI."""
+def _stream_agent_response_iter(prompt_text: str):
+    """Yield agent output chunks incrementally (no direct printing)."""
     cmd = ["cursor-agent", prompt_text, "--print", "--output-format", "stream-json"]
     try:
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1) as p:
             for line in iter(p.stdout.readline, ""):
                 try:
                     event = json.loads(line.strip())
-                    if event.get("type") == "assistant" and "message" in event:
-                        for part in event["message"].get("content", []):
-                            if part.get("type") == "text":
-                                sys.stdout.write(part["text"])  # non-destructive print
-                                sys.stdout.flush()
-                    elif event.get("type") == "result":
-                        print()
-                        break
                 except json.JSONDecodeError:
                     continue
+                if event.get("type") == "assistant" and "message" in event:
+                    for part in event["message"].get("content", []):
+                        if part.get("type") == "text":
+                            yield part["text"]
+                elif event.get("type") == "result":
+                    break
     except FileNotFoundError:
-        pass
+        return
 
 
-def _run_prompt_application(full_screen: bool, initial_text: str = "", initial_cursor: int | None = None, history_text: str = ""):
+def _run_prompt_application(full_screen: bool, initial_text: str = "", initial_cursor: int | None = None, history_text: str = "", transcript_entries: list[list[str, str]] | None = None, stream_prompt: str | None = None, show_welcome: bool = False):
     kb = KeyBindings()
     buf = Buffer(multiline=True)
     if initial_text:
@@ -249,7 +231,7 @@ def _run_prompt_application(full_screen: bool, initial_text: str = "", initial_c
         width=D(weight=1),
     )
 
-    # History area (inside app). Fixed height exactly by content lines.
+    # History area (preflight only). Fixed height by computed lines.
     history_ctrl = FormattedTextControl(text=history_text)
     history_window = Window(
         content=history_ctrl,
@@ -257,6 +239,47 @@ def _run_prompt_application(full_screen: bool, initial_text: str = "", initial_c
         dont_extend_height=True,
         height=D.exact(0),
     )
+
+    # Transcript area (conversation). Always below welcome and status, above input.
+    transcript_ctrl = FormattedTextControl(text="")
+    transcript_window = Window(
+        content=transcript_ctrl,
+        wrap_lines=True,
+        dont_extend_height=True,
+        height=D.exact(0),
+    )
+
+    # Header (fullscreen) — одна строка без рамки
+    header_ctrl = FormattedTextControl(text="DonutBuffer AI Wizard - Магический помощник разработчика")
+    header_window = Window(content=header_ctrl, height=D.exact(1), dont_extend_height=True)
+
+    # Рамка приветствия Cursor Agent — статичная рамка поверх ввода
+    welcome_text = (
+        "⬢ Welcome to Cursor Agent Beta\n\n"
+        "Cursor Agent CLI is in beta. Security safeguards are still evolving. It can read, modify, and\n"
+        "delete files, and execute shell commands you approve. Use at your own risk and only in\n"
+        "trusted environments.\n\n"
+        "Please read about our security at https://cursor.com/security."
+    )
+    welcome_ctrl = FormattedTextControl(text=welcome_text)
+    welcome_content = Window(content=welcome_ctrl, wrap_lines=True, dont_extend_height=True, height=D.exact(0))
+    welcome_top_ctrl = FormattedTextControl(text="")
+    welcome_bottom_ctrl = FormattedTextControl(text="")
+    welcome_top = Window(content=welcome_top_ctrl, height=D.exact(1), dont_extend_height=True)
+    welcome_bottom = Window(content=welcome_bottom_ctrl, height=D.exact(1), dont_extend_height=True)
+    welcome_left = Window(width=1, char="│", dont_extend_height=True)
+    welcome_right = Window(width=1, char="│", dont_extend_height=True)
+
+    # Два пустых ряда + две статусные строки + ещё пустой ряд
+    spacer_after_welcome = Window(height=D.exact(2), dont_extend_height=True)
+    status1_window = Window(content=FormattedTextControl(text="Cursor Agent"), height=D.exact(1), dont_extend_height=True)
+    _cwd = os.getcwd()
+    _home = os.path.expanduser("~")
+    _rel = _cwd.replace(_home + "/", "~/") if _cwd.startswith(_home) else _cwd
+    status2_window = Window(content=FormattedTextControl(text=f"{_rel} · main"), height=D.exact(1), dont_extend_height=True)
+    spacer_before_input = Window(height=D.exact(1), dont_extend_height=True)
+
+    # (duplicate definitions removed — welcome/header already defined above)
 
     top_ctrl = FormattedTextControl(text="")
     bottom_ctrl = FormattedTextControl(text="")
@@ -272,6 +295,48 @@ def _run_prompt_application(full_screen: bool, initial_text: str = "", initial_c
         bottom = "└" + "─" * max(2, cols - 2) + "┘"
         top_ctrl.text = top
         bottom_ctrl.text = bottom
+        welcome_top_ctrl.text = top
+        welcome_bottom_ctrl.text = bottom
+
+    def _build_user_box(text: str, cols: int) -> str:
+        inner = max(1, cols - 2)
+        lines = text.split("\n") if text != "" else [""]
+        wrapped_lines: list[str] = []
+        for ln in lines:
+            parts = textwrap.wrap(ln, width=inner) or [""]
+            wrapped_lines.extend(parts)
+        top = "┌" + "─" * inner + "┐"
+        bottom = "└" + "─" * inner + "┘"
+        body = []
+        for wl in wrapped_lines:
+            pad = " " * max(0, inner - len(wl))
+            body.append("│" + wl + pad + "│")
+        return "\n".join([top, *body, bottom])
+
+    def _render_transcript(cols: int) -> tuple[list[str], int]:
+        if not transcript_entries:
+            return [], 0
+        visual_lines: list[str] = []
+        gap = [""]  # blank line between blocks
+        first = True
+        for role, txt in transcript_entries:
+            if not first:
+                visual_lines.extend(gap)
+            first = False
+            if role == "user":
+                box_text = _build_user_box(txt, cols)
+                visual_lines.extend(box_text.splitlines() or [""])
+            else:
+                # agent block: preserve newlines and indentation exactly; UI will wrap visually
+                plain_lines = (txt or "").splitlines() or [""]
+                visual_lines.extend(plain_lines)
+        # count visual rows accounting for wrapping width
+        total = 0
+        for ln in visual_lines or [""]:
+            total += max(1, len(textwrap.wrap(ln, width=max(1, cols))) or 1)
+        return visual_lines, total
+
+    # No manual scrolling; always stick to the newest messages
 
     def recompute_height():
         app = get_app()
@@ -289,24 +354,79 @@ def _run_prompt_application(full_screen: bool, initial_text: str = "", initial_c
         input_window.height = D.exact(needed)
         left_border.height = D.exact(needed)
         right_border.height = D.exact(needed)
-        # history exact height (wrapped), limited to available rows
+        # welcome box height (shown only once when show_welcome=True)
+        if show_welcome:
+            w_lines = 0
+            for wl in welcome_text.splitlines() or [""]:
+                wrapped = textwrap.wrap(wl, width=max(1, cols - 2)) or [""]
+                w_lines += max(1, len(wrapped))
+            welcome_content.height = D.exact(w_lines)
+            welcome_left.height = D.exact(w_lines)
+            welcome_right.height = D.exact(w_lines)
+        else:
+            w_lines = 0
+            welcome_content.height = D.exact(0)
+            welcome_left.height = D.exact(0)
+            welcome_right.height = D.exact(0)
+        # render transcript to current width and measure
+        all_t_lines, t_lines = _render_transcript(cols)
+        h_lines = 0
         if history_text:
-            h_lines = 0
             for hl in history_text.splitlines() or [""]:
                 h_lines += max(1, len(textwrap.wrap(hl, width=cols)) or 1)
-            max_hist = max(0, rows - (1 + needed + 1))  # top + input + bottom
-            history_window.height = D.exact(min(h_lines, max_hist))
+
+        # reserved rows below transcript/history stack:
+        # header(optional) + welcome frame(2) + welcome content(w_lines) + spacer_after_welcome(2) + status(2)
+        # + transcript_window(take_first) + spacer_before_input(1) + input frame(2) + input content(needed)
+        reserved_fixed = 2 + 2 + 1 + 2 + needed
+        if show_welcome:
+            reserved_fixed += 2 + w_lines
+        if full_screen:
+            reserved_fixed += 1
+        available_for_scroll = max(0, rows - reserved_fixed)
+
+        # Allocate to transcript first (to keep recent conversation visible), then remaining for history
+        # ensure at least one transcript line is visible (steal from history if needed)
+        if available_for_scroll <= 0 and t_lines > 0:
+            t_show = 1
+            h_show = 0
         else:
-            history_window.height = D.exact(0)
+            t_show = min(t_lines, available_for_scroll)
+            h_show = min(h_lines, max(0, available_for_scroll - t_show))
+        # keep only the last t_show lines so newest messages are visible
+        if t_show > 0 and all_t_lines:
+            transcript_ctrl.text = "\n".join(all_t_lines[-t_show:])
+        else:
+            transcript_ctrl.text = ""
+        transcript_window.height = D.exact(t_show)
+        history_window.height = D.exact(h_show)
         draw_borders()
         app.invalidate()
 
-    root = HSplit([
-        history_window,
+    # Manual scrolling removed per requirements
+
+    common_stack = [history_window]
+    if show_welcome:
+        common_stack.extend([
+            welcome_top,
+            VSplit([welcome_left, welcome_content, welcome_right]),
+            welcome_bottom,
+        ])
+    common_stack.extend([
+        spacer_after_welcome,
+        status1_window,
+        status2_window,
+        transcript_window,
+        spacer_before_input,
         frame_top,
         VSplit([left_border, input_window, right_border]),
         frame_bottom,
     ])
+
+    if full_screen:
+        root = HSplit([header_window, *common_stack])
+    else:
+        root = HSplit(common_stack)
     app = Application(
         layout=Layout(root),
         key_bindings=kb,
@@ -334,8 +454,38 @@ def _run_prompt_application(full_screen: bool, initial_text: str = "", initial_c
                 return
             recompute_height()
 
+    async def stream_runner():
+        # Stream agent chunks and update transcript live
+        if not stream_prompt:
+            return
+        # Append placeholder agent entry
+        if transcript_entries is not None:
+            transcript_entries.append(["agent", ""])
+        loop = asyncio.get_running_loop()
+        def iterator():
+            for chunk in _stream_agent_response_iter(stream_prompt):
+                yield chunk
+        # Run blocking generator in thread
+        def run_and_update():
+            for chunk in iterator():
+                if transcript_entries is not None and transcript_entries:
+                    transcript_entries[-1][1] += chunk
+                # always stick to bottom; no manual scroll state kept
+                try:
+                    get_app().invalidate()
+                except Exception:
+                    pass
+            # exit when done
+            try:
+                get_app().exit(result="__STREAM_DONE__")
+            except Exception:
+                pass
+        await loop.run_in_executor(None, run_and_update)
+
     def start_watcher():
         get_app().create_background_task(watcher())
+        if stream_prompt:
+            get_app().create_background_task(stream_runner())
 
     app.pre_run_callables.append(start_watcher)
     buf.text = buf.text or ""
@@ -347,9 +497,24 @@ def run_interactive(history_text: str = "") -> None:
     fullscreen = False
     saved_text: str = ""
     saved_cursor: int | None = None
+    # Reset input each turn: boxes start with placeholder only
+    last_submitted_len: int = 0
+    # Accumulated conversation transcript (agent replies), persists across modes and prompts
+    transcript_parts: list[str] = []
+    # Show welcome box only once (before "Cursor Agent" line)
+    welcome_shown = False
     while True:
         try:
-            result = _run_prompt_application(fullscreen, saved_text, saved_cursor, history_text)
+            # Build visible history: preflight + transcript
+            # We pass transcript entries to render user boxes persistently
+            transcript_entries = transcript_parts
+            # Ensure cursor defaults to end of current saved_text
+            init_cursor = len(saved_text) if saved_cursor is None else saved_cursor
+            # stream_prompt=None when just editing; set to user text after submission
+            show_welcome = not welcome_shown
+            result = _run_prompt_application(fullscreen, saved_text, init_cursor, history_text, transcript_entries, None, show_welcome)
+            if show_welcome:
+                welcome_shown = True
         except KeyboardInterrupt:
             print("Выход...")
             break
@@ -359,23 +524,36 @@ def run_interactive(history_text: str = "") -> None:
             fullscreen = True
             saved_text = result[1] if len(result) > 1 else ""
             saved_cursor = result[2] if len(result) > 2 else None
+            # Clamp last_submitted_len to current buffer size
+            last_submitted_len = min(last_submitted_len, len(saved_text))
             continue
 
         if result is None:
             print("Выход...")
             break
-
-        user_text = (result or "").strip()
+            
+        user_text_raw = result or ""
+        # Detect only the newly appended part after the last submission
+        if last_submitted_len > len(user_text_raw):
+            # Safety: reset if buffer shrank
+            last_submitted_len = 0
+        new_segment = user_text_raw[last_submitted_len:]
+        user_text = new_segment.strip()
         if not user_text:
-            # redraw prompt again
-            saved_text = ""
-            saved_cursor = None
+            # keep box as-is if nothing new typed
+            saved_text = user_text_raw
+            saved_cursor = len(saved_text)
             continue
 
         print()
-        _stream_agent_response(user_text)
+        # Record user block and then stream agent live in UI
+        transcript_parts.append(["user", user_text])
+        # Run UI in streaming mode to display incremental agent output
+        _ = _run_prompt_application(True, "", None, history_text, transcript_parts, user_text, False)
+        # Reset input box to placeholder for next turn
         saved_text = ""
         saved_cursor = None
+        last_submitted_len = 0
 
 
 if __name__ == "__main__":
