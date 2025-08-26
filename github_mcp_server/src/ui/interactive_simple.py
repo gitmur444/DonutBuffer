@@ -8,7 +8,7 @@ Interactive CLI using prompt_toolkit with dynamic single-line frame prompt.
 - Adjusts to terminal resize, wrapping content accordingly
 """
 
-import asyncio
+# Removed asyncio import as async functionality was removed
 import json
 import os
 import signal
@@ -65,7 +65,7 @@ class DynamicPromptUI:
         def _(event) -> None:
             event.app.exit(result=self.buffer.text)
 
-        @self.kb.add("s-enter")
+        @self.kb.add("c-j")
         def _(event) -> None:
             event.current_buffer.insert_text("\n")
 
@@ -94,7 +94,7 @@ class DynamicPromptUI:
             style=self.style,
         )
 
-        self.app.create_background_task(self._resize_watcher())
+# Removed problematic async background task
         self._redraw_frame()
 
     def _before_input(self):
@@ -141,15 +141,7 @@ class DynamicPromptUI:
         self._redraw_frame()
         app.invalidate()
 
-    async def _resize_watcher(self) -> None:
-        app = self.app
-        last_cols = app.output.get_size().columns
-        while True:
-            await asyncio.sleep(0.2)
-            cols = app.output.get_size().columns
-            if cols != last_cols:
-                last_cols = cols
-                self._recompute_height()
+# Removed async _resize_watcher function to fix event loop issues
 
     def run(self) -> str | None:
         self._recompute_height()

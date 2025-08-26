@@ -7,10 +7,9 @@
 from pathlib import Path
 from src.core.base_wizard import BaseWizard, Colors
 from src.core.env_manager import EnvManager
-from src.core.dependency_checker import DependencyChecker
 from src.setup.github_setup import GitHubSetup
 from src.setup.mcp_setup import MCPSetup
-from tests.integration.test_integration import IntegrationTest
+# IntegrationTest перемещён в tests/preflight/test_integration.py и вызывается раннером
 from rich.console import Console
 
 # Импортируем Ambient Agent для тестирования
@@ -34,10 +33,8 @@ class DonutAIWizard(BaseWizard):
         
         # Инициализируем компоненты
         self.env_manager = EnvManager(self.donut_dir)
-        self.dependency_checker = DependencyChecker()
         self.github_setup = GitHubSetup(self.env_manager)
         self.mcp_setup = MCPSetup(self.donut_dir)
-        self.integration_test = IntegrationTest(self.env_manager)
         
         # Загружаем переменные из .env файла если он существует
         self.env_manager.load_env_file()
