@@ -42,8 +42,10 @@ class EventHandlers(BaseWizard):
         
         self.print_info(f"🚀 Workflow {workflow_name} (#{run_number}) {event_type}")
         
-        # Генерируем промпт
+        # Генерируем промпт (может быть пустым для неинтересных событий)
         prompt = self.prompt_generator.generate_prompt(event)
+        if not prompt:
+            return
         
         # Отправляем в cursor-agent
         success = self.agent_injector.inject_prompt(prompt, "workflow_event")
@@ -62,6 +64,8 @@ class EventHandlers(BaseWizard):
         self.print_info(f"👤 Автор: {author}")
         
         prompt = self.prompt_generator.generate_prompt(event)
+        if not prompt:
+            return
         success = self.agent_injector.inject_prompt(prompt, "pr_analysis")
         
         if success:

@@ -22,7 +22,7 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
-from prompt_toolkit.layout.controls import BufferControl
+from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.containers import VSplit
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.processors import BeforeInput
@@ -49,11 +49,16 @@ class DynamicPromptUI:
             height=D(preferred=1),
         )
 
-        # Borders
-        self.top_border = Window(height=1)
-        self.left_border = Window(width=1)
-        self.right_border = Window(width=1)
-        self.bottom_border = Window(height=1)
+        # Borders (use FormattedTextControl to allow safe text updates)
+        self.top_ctrl = FormattedTextControl(text="")
+        self.bottom_ctrl = FormattedTextControl(text="")
+        self.left_ctrl = FormattedTextControl(text="")
+        self.right_ctrl = FormattedTextControl(text="")
+
+        self.top_border = Window(height=1, content=self.top_ctrl)
+        self.left_border = Window(width=1, content=self.left_ctrl)
+        self.right_border = Window(width=1, content=self.right_ctrl)
+        self.bottom_border = Window(height=1, content=self.bottom_ctrl)
 
         self.kb = KeyBindings()
 
@@ -112,16 +117,13 @@ class DynamicPromptUI:
         # Draw top/bottom lines across full width
         top = "┌" + "─" * max(2, columns - 2) + "┐"
         bottom = "└" + "─" * max(2, columns - 2) + "┘"
-        self.top_border.content = BufferControl(buffer=Buffer(read_only=True))
-        self.bottom_border.content = BufferControl(buffer=Buffer(read_only=True))
-        self.top_border.content.buffer.text = top
-        self.bottom_border.content.buffer.text = bottom
+        self.top_ctrl.text = top
+        self.bottom_ctrl.text = bottom
         # Vertical borders
-        self.left_border.content = BufferControl(buffer=Buffer(read_only=True))
-        self.right_border.content = BufferControl(buffer=Buffer(read_only=True))
         height = self.input_window.height.preferred or 1
-        self.left_border.content.buffer.text = "\n".join(["│" for _ in range(height)])
-        self.right_border.content.buffer.text = "\n".join(["│" for _ in range(height)])
+        vertical = "\n".join(["│" for _ in range(height)])
+        self.left_ctrl.text = vertical
+        self.right_ctrl.text = vertical
         app.invalidate()
 
     def _recompute_height(self) -> None:
@@ -171,14 +173,26 @@ def _stream_agent_response(prompt_text: str) -> None:
 
 
 def run_interactive() -> None:
-    ui = DynamicPromptUI()
-    result = ui.run()
-    if result is None:
-        print("Ввод отменён")
-        return
-    if result.strip():
+    while True:
+        ui = DynamicPromptUI()
+        try:
+            result = ui.run()
+        except KeyboardInterrupt:
+            print("\nВыход...")
+            break
+
+        if result is None:
+            print("Выход...")
+            break
+
+        user_text = result.strip()
+        if not user_text:
+            # Пустой ввод — просто перерисовать новый промпт
+            continue
+
         print()
-        _stream_agent_response(result.strip())
+        _stream_agent_response(user_text)
+        # После ответа — цикл повторится и снова откроет рамку ввода
 
 
 if __name__ == "__main__":

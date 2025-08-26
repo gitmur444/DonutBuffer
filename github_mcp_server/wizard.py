@@ -66,7 +66,9 @@ class DonutAIWizard(BaseWizard):
         except KeyboardInterrupt:
             console.print(f"\n[yellow]⚠️  Настройка прервана пользователем[/yellow]")
         except Exception as e:
-            self.print_error(f"Неожиданная ошибка: {e}")
+            import traceback
+            self.print_error("Неожиданная ошибка:")
+            traceback.print_exc()
 
     def print_header(self) -> None:
         """Печать заголовка мастера"""
