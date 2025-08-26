@@ -179,47 +179,7 @@ class AmbientAgent(BaseWizard):
         
         self.print_success(f"🎯 Запущен ручной анализ: {analysis_type}")
     
-    def test_event_system(self) -> bool:
-        """
-        E2E тест системы событий через GitHub Issues API
-        
-        Returns:
-            bool: True если система событий работает корректно (fail-fast)
-        """
-        try:
-            # 1. Создаем тестовый issue
-            issue = self.github_monitor.create_test_issue()
-            issue_number = issue['number']
-            
-            # 2. Сбрасываем флаг и запускаем систему
-            self.event_handlers.test_event_processed = False
-            self.event_system.start_processing()
-            
-            # 3. Принудительно проверяем и обрабатываем события
-            self.github_monitor.force_check(issue_number)
-            
-            pending_count = self.event_system.get_pending_events_count()
-            if pending_count > 0:
-                for _ in range(pending_count):
-                    if self.event_system.event_queue:
-                        event = self.event_system.event_queue.pop(0)
-                        self.event_system.process_event(event)
-            
-            # 4. Проверяем результат
-            if self.event_handlers.test_event_processed:
-                result = True
-            else:
-                self.print_error("❌ E2E тест провален: событие не обработано")
-                result = False
-            
-            # 5. Cleanup
-            self.github_monitor.delete_test_issue(issue_number)
-            
-            return result
-            
-        except Exception as e:
-            self.print_error(f"❌ E2E тест провален с ошибкой: {e}")
-            return False
+    # E2E проверка вынесена в tests/preflight/check_ambient.py
 
 if __name__ == "__main__":
     # Простой способ запуска для тестирования

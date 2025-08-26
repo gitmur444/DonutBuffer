@@ -10,16 +10,11 @@ import subprocess
 import json
 import signal
 from pathlib import Path
+import select
 
 from prompt_toolkit import prompt
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
-from prompt_toolkit.layout.containers import HSplit, Window
-from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.layout import Layout
-from prompt_toolkit.application import Application
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.widgets import Frame, Box
 
 from rich.console import Console
 from rich.panel import Panel
@@ -49,8 +44,6 @@ def draw_header():
 
 # Define style for prompt_toolkit
 style = Style.from_dict({
-    'frame.border': '#ffffff',
-    'frame.title': '#ffffff bold',
     'input': '#ffffff',
     'placeholder': '#888888 italic',
 })
@@ -58,12 +51,21 @@ style = Style.from_dict({
 def get_user_input():
     """Get input using prompt_toolkit with cursor-agent style"""
     try:
-        # Создаем красивый prompt с рамкой как в cursor-agent
+        # Сбрасываем возможные оставшиеся escape/ASCII последовательности из stdin
+        try:
+            while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                try:
+                    # Читаем и отбрасываем мусор
+                    _ = sys.stdin.read(1024)
+                except Exception:
+                    break
+        except Exception:
+            pass
         user_input = prompt(
-            HTML('<frame>→ </frame>'),
-            placeholder=HTML('<placeholder>Add a follow-up</placeholder>'),
+            '→ ',
+            placeholder='Add a follow-up',
             style=style,
-            mouse_support=True,
+            mouse_support=False,
             complete_style='column',
             wrap_lines=True,
         )
