@@ -1,150 +1,193 @@
+#!/usr/bin/env python3
 """
-Interactive CLI using prompt_toolkit - professional solution
+Interactive CLI using prompt_toolkit with dynamic single-line frame prompt.
+- Full frame visible at start
+- Placeholder "→ Plan, search, build anything" in gray until typing
+- Only "→" remains once user starts typing
+- Auto-expands vertically as text wraps or on explicit newline
+- Adjusts to terminal resize, wrapping content accordingly
 """
 
-import threading
-import time
-import os
-import sys
-import subprocess
+import asyncio
 import json
+import os
 import signal
-from pathlib import Path
-import select
+import subprocess
+import sys
+import textwrap
+from typing import List
 
-from prompt_toolkit import prompt
-from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.application import Application
+from prompt_toolkit.application.current import get_app
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import HSplit, Layout, Window
+from prompt_toolkit.layout.controls import BufferControl
+from prompt_toolkit.layout.containers import VSplit
+from prompt_toolkit.layout.dimension import Dimension as D
+from prompt_toolkit.layout.processors import BeforeInput
 from prompt_toolkit.styles import Style
 
-from rich.console import Console
-from rich.panel import Panel
 
-# Add parent directory to sys.path for absolute imports
-sys.path.append(str(Path(__file__).parent.parent))
-from ..core.base_wizard import Colors
+PLACEHOLDER = "Plan, search, build anything"
 
-console = Console()
-stop_event = threading.Event()
 
-def signal_handler(signum, frame):
-    """Handle Ctrl+C gracefully"""
-    stop_event.set()
-    console.print(f"\n[yellow]Выход...[/yellow]")
-    sys.exit(0)
+class DynamicPromptUI:
+    def __init__(self) -> None:
+        self.placeholder_active = True
 
-def draw_header():
-    """Draw header like cursor-agent"""
-    header_panel = Panel(
-        f"  Cursor Agent\n  ~/{os.path.basename(os.getcwd())} · main",
-        border_style="white",
-        padding=(0, 1),
-        width=console.size.width
-    )
-    console.print(header_panel)
+        self.buffer = Buffer(multiline=True)
+        self.buffer.on_text_changed += self._on_text_changed
 
-# Define style for prompt_toolkit
-style = Style.from_dict({
-    'input': '#ffffff',
-    'placeholder': '#888888 italic',
-})
-
-def get_user_input():
-    """Get input using prompt_toolkit with cursor-agent style"""
-    try:
-        # Сбрасываем возможные оставшиеся escape/ASCII последовательности из stdin
-        try:
-            while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-                try:
-                    # Читаем и отбрасываем мусор
-                    _ = sys.stdin.read(1024)
-                except Exception:
-                    break
-        except Exception:
-            pass
-        user_input = prompt(
-            '→ ',
-            placeholder='Add a follow-up',
-            style=style,
-            mouse_support=False,
-            complete_style='column',
+        self.input_window = Window(
+            content=BufferControl(
+                buffer=self.buffer,
+                input_processors=[BeforeInput(self._before_input)],
+                focusable=True,
+            ),
             wrap_lines=True,
+            height=D(preferred=1),
         )
-        return user_input.strip()
-    except (EOFError, KeyboardInterrupt):
-        stop_event.set()
-        return None
 
-def display_user_message(message):
-    """Display user message in a box like cursor-agent"""
-    user_panel = Panel(
-        message,
-        border_style="green",
-        padding=(0, 1),
-        width=console.size.width
-    )
-    console.print(user_panel)
+        # Borders
+        self.top_border = Window(height=1)
+        self.left_border = Window(width=1)
+        self.right_border = Window(width=1)
+        self.bottom_border = Window(height=1)
 
-def stream_agent_response(prompt_text):
-    """Stream agent response using cursor-agent --print --output-format stream-json"""
+        self.kb = KeyBindings()
+
+        @self.kb.add("c-c")
+        def _(event) -> None:
+            event.app.exit(result=None)
+
+        @self.kb.add("c-d")
+        def _(event) -> None:
+            event.app.exit(result=self.buffer.text)
+
+        @self.kb.add("s-enter")
+        def _(event) -> None:
+            event.current_buffer.insert_text("\n")
+
+        @self.kb.add("enter")
+        def _(event) -> None:
+            event.app.exit(result=self.buffer.text)
+
+        self.style = Style.from_dict({
+            "prompt": "bold",
+            "placeholder": "#888888 italic",
+        })
+
+        self.app = Application(
+            layout=Layout(
+                HSplit(
+                    [
+                        self.top_border,
+                        VSplit([self.left_border, self.input_window, self.right_border]),
+                        self.bottom_border,
+                    ]
+                )
+            ),
+            key_bindings=self.kb,
+            mouse_support=False,
+            full_screen=False,
+            style=self.style,
+        )
+
+        self.app.create_background_task(self._resize_watcher())
+        self._redraw_frame()
+
+    def _before_input(self):
+        if self.placeholder_active:
+            return [("class:prompt", "→ "), ("class:placeholder", PLACEHOLDER)]
+        return [("class:prompt", "→ ")]
+
+    def _on_text_changed(self, _event) -> None:
+        self.placeholder_active = len(self.buffer.text) == 0
+        self._recompute_height()
+
+    def _redraw_frame(self) -> None:
+        app = get_app()
+        columns = max(4, app.output.get_size().columns)
+        # Draw top/bottom lines across full width
+        top = "┌" + "─" * max(2, columns - 2) + "┐"
+        bottom = "└" + "─" * max(2, columns - 2) + "┘"
+        self.top_border.content = BufferControl(buffer=Buffer(read_only=True))
+        self.bottom_border.content = BufferControl(buffer=Buffer(read_only=True))
+        self.top_border.content.buffer.text = top
+        self.bottom_border.content.buffer.text = bottom
+        # Vertical borders
+        self.left_border.content = BufferControl(buffer=Buffer(read_only=True))
+        self.right_border.content = BufferControl(buffer=Buffer(read_only=True))
+        height = self.input_window.height.preferred or 1
+        self.left_border.content.buffer.text = "\n".join(["│" for _ in range(height)])
+        self.right_border.content.buffer.text = "\n".join(["│" for _ in range(height)])
+        app.invalidate()
+
+    def _recompute_height(self) -> None:
+        app = get_app()
+        columns = max(10, app.output.get_size().columns)
+        # inner width accounts for borders and prompt prefix
+        inner_width = max(1, columns - 2 - 2)  # -2 borders, -2 for "→ " approx
+        text = self.buffer.text or ""
+        if not text:
+            needed = 1
+        else:
+            needed = 0
+            for line in text.splitlines() or [""]:
+                wrapped: List[str] = textwrap.wrap(line, width=max(1, inner_width)) or [""]
+                needed += len(wrapped)
+        self.input_window.height = D(preferred=max(1, needed))
+        self._redraw_frame()
+        app.invalidate()
+
+    async def _resize_watcher(self) -> None:
+        app = self.app
+        last_cols = app.output.get_size().columns
+        while True:
+            await asyncio.sleep(0.2)
+            cols = app.output.get_size().columns
+            if cols != last_cols:
+                last_cols = cols
+                self._recompute_height()
+
+    def run(self) -> str | None:
+        self._recompute_height()
+        return self.app.run()
+
+
+def _stream_agent_response(prompt_text: str) -> None:
+    """Optional: example of streaming agent output using cursor-agent CLI."""
     cmd = ["cursor-agent", prompt_text, "--print", "--output-format", "stream-json"]
-    
     try:
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
-        
-        console.print(f"\n[blue]Assistant:[/blue]")
-        
-        for line in iter(process.stdout.readline, ''):
-            if stop_event.is_set():
-                process.terminate()
-                break
-                
-            try:
-                json_event = json.loads(line.strip())
-                if json_event.get("type") == "assistant" and "message" in json_event:
-                    content_parts = json_event["message"]["content"]
-                    for part in content_parts:
-                        if part.get("type") == "text":
-                            text = part["text"]
-                            console.print(text, end="")
-                elif json_event.get("type") == "result":
-                    console.print()  # Final newline
-                    break
-            except json.JSONDecodeError:
-                # Skip malformed JSON lines
-                continue
-            except Exception as e:
-                console.print(f"\n[red]Error processing response: {e}[/red]")
-                
-        process.stdout.close()
-        process.stderr.close()
-        process.wait()
-        
-    except Exception as e:
-        console.print(f"[red]Error running cursor-agent: {e}[/red]")
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1) as p:
+            for line in iter(p.stdout.readline, ""):
+                try:
+                    event = json.loads(line.strip())
+                    if event.get("type") == "assistant" and "message" in event:
+                        for part in event["message"].get("content", []):
+                            if part.get("type") == "text":
+                                sys.stdout.write(part["text"])  # non-destructive print
+                                sys.stdout.flush()
+                    elif event.get("type") == "result":
+                        print()
+                        break
+                except json.JSONDecodeError:
+                    continue
+    except FileNotFoundError:
+        pass
 
-def run_interactive():
-    """Main interactive loop with prompt_toolkit"""
-    # Если stdout не TTY (например, запуск через пайп), не запускаем TUI
-    if not sys.stdout.isatty():
-        console.print("[yellow]TUI отключен (не TTY). Запустите ./wizard напрямую в терминале.[/yellow]")
+
+def run_interactive() -> None:
+    ui = DynamicPromptUI()
+    result = ui.run()
+    if result is None:
+        print("Ввод отменён")
         return
-    # Set up signal handler for Ctrl+C
-    signal.signal(signal.SIGINT, signal_handler)
-    
-    # Draw header like cursor-agent
-    draw_header()
-    
-    # Footer info like cursor-agent
-    console.print("\n  [dim]Claude 4 Sonnet · 0%[/dim]")
-    
-    while not stop_event.is_set():
-        console.print()  # Spacing
-        
-        user_input = get_user_input()
-        if user_input is None or stop_event.is_set():
-            break
-            
-        if user_input:
-            display_user_message(user_input)
-            stream_agent_response(user_input)
-            console.print()  # Extra spacing for next iteration
+    if result.strip():
+        print()
+        _stream_agent_response(result.strip())
+
+
+if __name__ == "__main__":
+    run_interactive()

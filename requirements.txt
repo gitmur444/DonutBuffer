@@ -1,3 +1,4 @@
 requests>=2.25.0
 urllib3>=1.26.0
 pathlib2>=2.3.0;python_version<'3.4'
+prompt_toolkit>=3.0.0
