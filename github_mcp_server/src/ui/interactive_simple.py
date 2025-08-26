@@ -49,16 +49,17 @@ class DynamicPromptUI:
             height=D(preferred=1),
         )
 
-        # Borders (use FormattedTextControl to allow safe text updates)
-        self.top_ctrl = FormattedTextControl(text="")
-        self.bottom_ctrl = FormattedTextControl(text="")
-        self.left_ctrl = FormattedTextControl(text="")
-        self.right_ctrl = FormattedTextControl(text="")
+        # Borders built from char-filled windows so they auto-resize with the terminal
+        self.top_left = Window(height=1, width=1, char="┌")
+        self.top_line = Window(height=1, char="─")
+        self.top_right = Window(height=1, width=1, char="┐")
 
-        self.top_border = Window(height=1, content=self.top_ctrl)
-        self.left_border = Window(width=1, content=self.left_ctrl)
-        self.right_border = Window(width=1, content=self.right_ctrl)
-        self.bottom_border = Window(height=1, content=self.bottom_ctrl)
+        self.left_border = Window(width=1, char="│")
+        self.right_border = Window(width=1, char="│")
+
+        self.bottom_left = Window(height=1, width=1, char="└")
+        self.bottom_line = Window(height=1, char="─")
+        self.bottom_right = Window(height=1, width=1, char="┘")
 
         self.kb = KeyBindings()
 
@@ -87,9 +88,9 @@ class DynamicPromptUI:
             layout=Layout(
                 HSplit(
                     [
-                        self.top_border,
+                        VSplit([self.top_left, self.top_line, self.top_right], height=1),
                         VSplit([self.left_border, self.input_window, self.right_border]),
-                        self.bottom_border,
+                        VSplit([self.bottom_left, self.bottom_line, self.bottom_right], height=1),
                     ]
                 )
             ),
@@ -99,8 +100,8 @@ class DynamicPromptUI:
             style=self.style,
         )
 
-# Removed problematic async background task
-        self._redraw_frame()
+        self.app.create_background_task(self._resize_watcher())
+        self._invalidate()
 
     def _before_input(self):
         if self.placeholder_active:
@@ -111,20 +112,8 @@ class DynamicPromptUI:
         self.placeholder_active = len(self.buffer.text) == 0
         self._recompute_height()
 
-    def _redraw_frame(self) -> None:
-        app = get_app()
-        columns = max(4, app.output.get_size().columns)
-        # Draw top/bottom lines across full width
-        top = "┌" + "─" * max(2, columns - 2) + "┐"
-        bottom = "└" + "─" * max(2, columns - 2) + "┘"
-        self.top_ctrl.text = top
-        self.bottom_ctrl.text = bottom
-        # Vertical borders
-        height = self.input_window.height.preferred or 1
-        vertical = "\n".join(["│" for _ in range(height)])
-        self.left_ctrl.text = vertical
-        self.right_ctrl.text = vertical
-        app.invalidate()
+    def _invalidate(self) -> None:
+        get_app().invalidate()
 
     def _recompute_height(self) -> None:
         app = get_app()
@@ -140,10 +129,17 @@ class DynamicPromptUI:
                 wrapped: List[str] = textwrap.wrap(line, width=max(1, inner_width)) or [""]
                 needed += len(wrapped)
         self.input_window.height = D(preferred=max(1, needed))
-        self._redraw_frame()
-        app.invalidate()
+        self._invalidate()
 
-# Removed async _resize_watcher function to fix event loop issues
+    async def _resize_watcher(self) -> None:
+        app = self.app
+        last_size = app.output.get_size()
+        while True:
+            await asyncio.sleep(0.15)
+            size = app.output.get_size()
+            if size.columns != last_size.columns or size.rows != last_size.rows:
+                last_size = size
+                self._recompute_height()
 
     def run(self) -> str | None:
         self._recompute_height()
