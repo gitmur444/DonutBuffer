@@ -88,7 +88,8 @@ class DynamicPromptUI:
             style=self.style,
         )
 
-        self.app.create_background_task(self._resize_watcher())
+        # Background tasks must be created when an event loop is running.
+        # We schedule the watcher in run(pre_run=...) instead of here.
         self._invalidate()
 
     def _before_input(self):
@@ -131,7 +132,10 @@ class DynamicPromptUI:
 
     def run(self) -> str | None:
         self._recompute_height()
-        return self.app.run()
+        # Create the background task after the event loop is running
+        def _pre_run() -> None:
+            self.app.create_background_task(self._resize_watcher())
+        return self.app.run(pre_run=_pre_run)
 
 
 __all__ = ["DynamicPromptUI"]
