@@ -98,6 +98,8 @@ class CursorAgentClient:
                     if _is_assistant_event(obj):
                         chunk = _extract_text(obj)
                         if chunk and on_chunk:
+                            # debug chunk size
+                            # sys.stderr.write(f"[cursor] chunk {len(chunk)}\n"); sys.stderr.flush()
                             on_chunk(chunk)
                         continue
 

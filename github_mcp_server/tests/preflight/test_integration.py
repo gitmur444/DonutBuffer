@@ -19,12 +19,8 @@ class IntegrationTest(BaseWizard):
         """Шаг 4: Тестирование интеграции"""
         self.print_step(4, "Тестирование интеграции")
         
-        # Проверяем GitHub API доступ
-        if not self.test_github_api():
-            return False
-            
-        # Проверяем cursor-agent
-        return self.test_cursor_agent()
+        # Проверяем только GitHub API доступ
+        return self.test_github_api()
     
     def test_github_api(self) -> bool:
         """Тестирование доступа к GitHub API"""
@@ -89,21 +85,4 @@ class IntegrationTest(BaseWizard):
             pass
         return None
     
-    def test_cursor_agent(self) -> bool:
-        """Тестирование cursor-agent"""
-        try:
-            result = subprocess.run(
-                ["cursor-agent", "--help"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode == 0:
-                self.print_success("Cursor Agent готов к работе")
-                return True
-            else:
-                self.print_warning("Cursor Agent найден, но может работать медленно")
-                return True
-        except Exception as e:
-            self.print_warning(f"Cursor Agent тест: {e}")
-            return True 
+    # cursor-agent тест перенесён в ambient префлайт и выполняется косвенно через e2e

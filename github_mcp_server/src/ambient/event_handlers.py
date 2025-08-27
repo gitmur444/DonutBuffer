@@ -36,6 +36,7 @@ class EventHandlers(BaseWizard):
     
     def handle_workflow_event(self, event: Event) -> None:
         """Обрабатывает события workflow"""
+        # no debug prints
         workflow_name = event.data.get('workflow_name', 'Unknown')
         run_number = event.data.get('run_number', '?')
         event_type = event.data.get('event_type', 'изменился')
@@ -46,15 +47,14 @@ class EventHandlers(BaseWizard):
         prompt = self.prompt_generator.generate_prompt(event)
         if not prompt:
             return
-        # Выводим сформированный промпт в консоль
-        self.print_info("\n--- Prompt to cursor-agent ---\n" + prompt + "\n------------------------------")
-        # Отправляем промпт и получаем ответ (инженктор не печатает)
+        # Отправляем промпт и публикуем ответ в UI (без печати здесь)
         answer = self.agent_injector.send_prompt(prompt)
-        # Выводим ответ ассистента
         if answer:
-            self.print_success("\n--- Answer from cursor-agent ---\n" + answer + "\n--------------------------------")
-        else:
-            self.print_error("❌ cursor-agent не вернул ответа")
+            try:
+                from ..ui.message_bus import UIEventBus
+                UIEventBus.instance().publish_assistant_message(answer)
+            except Exception:
+                pass
     def handle_pr_created(self, event: Event) -> None:
         """Обрабатывает создание новых PR"""
         pr_number = event.data.get('pr_number', '?')

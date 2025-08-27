@@ -5,7 +5,8 @@ from src.core.env_manager import EnvManager
 from .check_dependencies import run_dependencies_check
 from .check_github import run_github_access_check
 from .check_mcp import run_mcp_config_check
-from .check_ambient import run_ambient_e2e_check
+from .check_ambient_agent import run_ambient_agent_check
+from .check_ambient_events import run_ambient_events_check
 from .test_integration import IntegrationTest
 
 
@@ -55,7 +56,18 @@ def run_preflight(donut_dir: Path, on_progress: Optional[Callable[[str], None]] 
             pass
     ok_all = ok_all and ok
 
-    ok, msg = run_ambient_e2e_check(donut_dir)
+    # Шаг 5: Ambient Agent (session + ping)
+    ok, msg = run_ambient_agent_check(donut_dir)
+    statuses.append(msg)
+    if on_progress:
+        try:
+            on_progress(msg)
+        except Exception:
+            pass
+    ok_all = ok_all and ok
+
+    # Шаг 6: Ambient Events (GITHUB_ISSUE_TEST E2E)
+    ok, msg = run_ambient_events_check(donut_dir)
     statuses.append(msg)
     if on_progress:
         try:

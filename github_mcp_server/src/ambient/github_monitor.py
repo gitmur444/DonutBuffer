@@ -31,10 +31,11 @@ class GitHubMonitor(BaseWizard):
         self.monitor_thread: Optional[threading.Thread] = None
         self.last_check_time = time.time()
         self.seen_runs: Set[str] = set()
+        self.seen_failures: Set[str] = set()
         self.start_time = time.time()
         
         # Настройки
-        self.check_interval = 5  # быстрее реагируем
+        self.check_interval = 10  # быстрее реагируем
         
     def detect_repo_name(self) -> Optional[str]:
         """Определяет имя GitHub репозитория"""
@@ -85,6 +86,7 @@ class GitHubMonitor(BaseWizard):
             self._baseline_runs()
         except Exception:
             pass
+        self.print_info("GitHub мониторинг: старт")
         self.monitor_thread.start()
         
         # Лаконичное сообщение
@@ -121,6 +123,7 @@ class GitHubMonitor(BaseWizard):
     def check_workflow_runs(self) -> None:
         """Проверяет workflow runs на наличие изменений"""
         if not self.repo_name:
+            self.print_warning("[monitor] repo_name not detected, skip runs")
             return
             
         try:
@@ -152,6 +155,10 @@ class GitHubMonitor(BaseWizard):
                         self.handle_workflow_event(run)
                     # Помечаем как увиденный, чтобы не слать историю
                     self.seen_runs.add(run_id)
+                # Детект завершения с ошибкой (emit один раз на факт фейла)
+                if str(conclusion).lower() in ("failure", "failed", "cancelled") and run_id not in self.seen_failures:
+                    self.handle_workflow_event(run)
+                    self.seen_failures.add(run_id)
                     
         except Exception as e:
             self.print_warning(f"Ошибка проверки workflow runs: {e}")
@@ -160,6 +167,7 @@ class GitHubMonitor(BaseWizard):
         """Обрабатывает событие workflow run"""
         status = run.get("status")
         conclusion = run.get("conclusion")
+        # no debug prints here
         
         # Определяем тип события
         if status == "in_progress" or status == "queued":
@@ -186,6 +194,7 @@ class GitHubMonitor(BaseWizard):
             source="github_monitor",
             priority=3
         )
+        # no debug prints on emit
 
     
     def check_pull_requests(self) -> None:
@@ -397,3 +406,7 @@ class GitHubMonitor(BaseWizard):
             run_id = str(run.get("id"))
             if run_id:
                 self.seen_runs.add(run_id)
+                conclusion = str(run.get("conclusion") or "").lower()
+                if conclusion in ("failure", "failed", "cancelled"):
+                    # Не слать событий на старые фейлы
+                    self.seen_failures.add(run_id)

@@ -10,15 +10,16 @@ import subprocess
 import sys
 from typing import Iterable, Optional
 from ..core.cursor_client import get_global_cursor_client
+from .message_bus import UIEventBus
 
 
 def stream_agent_response(prompt_text: str) -> None:
     client = get_global_cursor_client()
+    bus = UIEventBus.instance()
     def on_chunk(t: str) -> None:
-        sys.stdout.write(t)
-        sys.stdout.flush()
+        bus.publish_assistant_message(t)
     def on_result(_t: str) -> None:
-        print()
+        pass
     client.send_stream(prompt_text, on_chunk=on_chunk, on_result=on_result)
 
 

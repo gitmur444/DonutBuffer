@@ -68,7 +68,8 @@ class DonutAIWizard(BaseWizard):
             
             # Запускаем Ambient Agent в фоне (тихо)
             import os
-            os.environ["AMBIENT_SILENT"] = "1"
+            # Для отладки цепочки событий включаем подробный вывод
+            os.environ["AMBIENT_SILENT"] = "0"
             self.start_ambient_agent_background_no_sig()
             # Запуск простого интерактивного режима
             from src.ui import run_interactive
@@ -107,20 +108,22 @@ class DonutAIWizard(BaseWizard):
             self._ambient = AmbientAgent(self.donut_dir, install_signal_handlers=False)
 
             def _runner():
-                # Полностью глушим любые принты фоновых компонентов
-                def _silence(x):
-                    for name in ("print_info", "print_success", "print_warning", "print_error"):
-                        if hasattr(x, name):
-                            try:
-                                setattr(x, name, lambda *a, **k: None)
-                            except Exception:
-                                pass
-                _silence(self._ambient)
-                # Также глушим дочерние компоненты, если уже созданы
-                for comp_name in ("github_monitor", "event_system", "prompt_generator", "agent_injector", "event_handlers"):
-                    comp = getattr(self._ambient, comp_name, None)
-                    if comp is not None:
-                        _silence(comp)
+                silent = os.environ.get("AMBIENT_SILENT", "").strip().lower() in ("1", "true", "yes")
+                if silent:
+                    # Полностью глушим любые принты фоновых компонентов
+                    def _silence(x):
+                        for name in ("print_info", "print_success", "print_warning", "print_error"):
+                            if hasattr(x, name):
+                                try:
+                                    setattr(x, name, lambda *a, **k: None)
+                                except Exception:
+                                    pass
+                    _silence(self._ambient)
+                    # Также глушим дочерние компоненты, если уже созданы
+                    for comp_name in ("github_monitor", "event_system", "prompt_generator", "agent_injector", "event_handlers"):
+                        comp = getattr(self._ambient, comp_name, None)
+                        if comp is not None:
+                            _silence(comp)
                 self._ambient.start()
 
             t = threading.Thread(target=_runner, daemon=True)

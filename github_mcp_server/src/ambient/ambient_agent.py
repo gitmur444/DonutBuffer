@@ -69,9 +69,11 @@ class AmbientAgent(BaseWizard):
         self.running = True
         
         # Запускаем систему событий
+        self.print_info("[ambient] starting event system")
         self.event_system.start_processing()
         
         # Запускаем мониторинг GitHub
+        self.print_info("[ambient] starting GitHub monitor")
         if self.github_monitor.start_monitoring():
             self.print_success("🔍 GitHub мониторинг активен")
         else:
@@ -93,25 +95,13 @@ class AmbientAgent(BaseWizard):
     def main_loop(self) -> None:
         """Основной цикл ambient agent"""
         while self.running:
-            try:
-                # Показываем статус каждые 5 минут
-                self.show_status()
-                
+            try:                
                 # Ожидаем
                 time.sleep(300)  # 5 минут
                 
             except Exception as e:
                 self.print_error(f"Ошибка в main loop: {e}")
                 time.sleep(60)
-    
-    def show_status(self) -> None:
-        """Показывает текущий статус системы"""
-        pending_events = self.event_system.get_pending_events_count()
-        
-        self.print_info(f"📊 Статус Ambient Agent:")
-        self.print_info(f"   • События в очереди: {pending_events}")
-        self.print_info(f"   • GitHub мониторинг: {'🟢 Активен' if self.github_monitor.monitoring else '🔴 Остановлен'}")
-        self.print_info(f"   • Время работы: {self.get_uptime()}")
     
     def get_uptime(self) -> str:
         """Возвращает время работы"""
