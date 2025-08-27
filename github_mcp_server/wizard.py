@@ -71,7 +71,7 @@ class DonutAIWizard(BaseWizard):
             os.environ["AMBIENT_SILENT"] = "1"
             self.start_ambient_agent_background_no_sig()
             # Запуск простого интерактивного режима
-            from src.ui.interactive_simple import run_interactive
+            from src.ui import run_interactive
             run_interactive(preflight_text)
             
         except KeyboardInterrupt:
