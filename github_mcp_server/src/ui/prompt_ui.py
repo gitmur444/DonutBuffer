@@ -107,8 +107,10 @@ class DynamicPromptUI:
     def _recompute_height(self) -> None:
         app = get_app()
         columns = max(10, app.output.get_size().columns)
-        # inner width accounts for borders and prompt prefix
-        inner_width = max(1, columns - 2 - 2)  # -2 borders, -2 for "→ " approx
+        # Compute inner width: remove only vertical borders. The prompt prefix
+        # is rendered by BeforeInput and already accounted for by prompt_toolkit
+        # when wrapping; subtracting it here leads to mismatch on resize.
+        inner_width = max(1, columns - 2)  # -2 for left/right borders only
         text = self.buffer.text or ""
         if not text:
             needed = 1
