@@ -42,18 +42,19 @@ class EventHandlers(BaseWizard):
         
         self.print_info(f"🚀 Workflow {workflow_name} (#{run_number}) {event_type}")
         
-        # Генерируем промпт (может быть пустым для неинтересных событий)
+        # Генерируем промпт ТОЛЬКО для упавших workflow
         prompt = self.prompt_generator.generate_prompt(event)
         if not prompt:
             return
-        
-        # Отправляем в cursor-agent
-        success = self.agent_injector.inject_prompt(prompt, "workflow_event")
-        
-        if success:
-            self.print_success("✅ Уведомление о workflow отправлено в cursor-agent")
+        # Выводим сформированный промпт в консоль
+        self.print_info("\n--- Prompt to cursor-agent ---\n" + prompt + "\n------------------------------")
+        # Отправляем промпт и получаем ответ (инженктор не печатает)
+        answer = self.agent_injector.send_prompt(prompt)
+        # Выводим ответ ассистента
+        if answer:
+            self.print_success("\n--- Answer from cursor-agent ---\n" + answer + "\n--------------------------------")
         else:
-            self.print_error("❌ Не удалось отправить уведомление в cursor-agent")
+            self.print_error("❌ cursor-agent не вернул ответа")
     def handle_pr_created(self, event: Event) -> None:
         """Обрабатывает создание новых PR"""
         pr_number = event.data.get('pr_number', '?')
@@ -66,11 +67,9 @@ class EventHandlers(BaseWizard):
         prompt = self.prompt_generator.generate_prompt(event)
         if not prompt:
             return
-        success = self.agent_injector.inject_prompt(prompt, "pr_analysis")
-        
-        if success:
-            self.print_success("✅ Анализ PR отправлен в cursor-agent")
-            self.print_info("💡 Проверьте cursor-agent для code review рекомендаций")
+        answer = self.agent_injector.send_prompt(prompt)
+        if answer:
+            self.print_success("✅ Анализ PR отправлен в cursor-agent и получен ответ")
     
     def handle_manual_trigger(self, event: Event) -> None:
         """Обрабатывает ручные триггеры"""
@@ -81,11 +80,9 @@ class EventHandlers(BaseWizard):
         self.print_info(f"📝 Контент: {content[:100]}...")
         
         prompt = self.prompt_generator.generate_prompt(event)
-        success = self.agent_injector.inject_prompt(prompt, "manual_analysis")
-        
-        if success:
-            self.print_success("✅ Ручной анализ отправлен в cursor-agent")
-            self.print_info("💡 Проверьте cursor-agent для результатов анализа")
+        answer = self.agent_injector.send_prompt(prompt)
+        if answer:
+            self.print_success("✅ Ручной анализ отправлен в cursor-agent и получен ответ")
     
     def handle_system_test(self, event: Event) -> None:
         """Обрабатывает системный тест"""

@@ -111,6 +111,29 @@ class CursorAgentClient:
         except Exception:
             return False
 
+    def attach_session(self, session_id: str) -> None:
+        """Attach to an existing cursor-agent session by id for future resumes."""
+        self._session_id = session_id
+
+    def get_session_id(self) -> Optional[str]:
+        """Return the currently attached/learned session_id, if any."""
+        return self._session_id
+
+    def ensure_session(self) -> Optional[str]:
+        """Ensure a session is established; create one silently if needed.
+
+        Sends a minimal prompt without any callbacks to avoid output. Returns
+        the session_id if available (existing or newly established).
+        """
+        if self._session_id:
+            return self._session_id
+        # Minimal, non-intrusive prompt to establish a session and get session_id
+        try:
+            self.send_stream("init session", on_user=None, on_chunk=None, on_result=None)
+        except Exception:
+            pass
+        return self._session_id
+
 
 def _extract_text(obj: Any) -> str:
     if isinstance(obj, dict):

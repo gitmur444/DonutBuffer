@@ -1,0 +1,27 @@
+name: Manual Failure Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why run the failing job?"
+        required: false
+        default: "manual test"
+
+jobs:
+  always_fail:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print context
+        run: |
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Commit: $GITHUB_SHA"
+
+      - name: Intentionally fail
+        run: |
+          echo "Forcing failure for ambient monitoring test"
+          exit 1
+
