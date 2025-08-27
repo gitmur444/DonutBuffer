@@ -15,6 +15,7 @@ import json
 # Импортируем из родительского пакета
 sys.path.append(str(Path(__file__).parent.parent))
 from ..core.base_wizard import BaseWizard
+from ..core.cursor_client import get_global_cursor_client
 
 class AgentInjector(BaseWizard):
     """Инжектор промптов в cursor-agent"""
@@ -36,8 +37,19 @@ class AgentInjector(BaseWizard):
         self.print_info(f"🤖 [{source}] Отправляю в cursor-agent...")
         
         try:
-            # Потоковый режим JSON, выводим сообщения пользователя в рамке
-            return self._run_streaming(prompt)
+            client = get_global_cursor_client()
+            def _on_user(text: str) -> None:
+                # печатаем рамку один раз, чтобы отобразить вход пользователя
+                print(self._box(text))
+            def _on_chunk(text: str) -> None:
+                print(text, end="", flush=True)
+            def _on_result(_text: str) -> None:
+                print("")
+            ok = client.send_stream(prompt, on_user=_on_user, on_chunk=_on_chunk, on_result=_on_result)
+            if ok:
+                return True
+            # Если не удалось — пробуем fallback
+            return self.try_resume_method(prompt, source)
         except subprocess.TimeoutExpired:
             self.print_warning("Timeout при отправке через CLI")
             return self.try_resume_method(prompt, source)
@@ -52,50 +64,20 @@ class AgentInjector(BaseWizard):
         - Ответ ассистента стримится токенами без переноса строки, с принудительным flush
         - Итог (type=result) завершает строку
         """
+        # Поддерживаем обратную совместимость, перенаправляя на глобальный клиент
         try:
-            with subprocess.Popen(
-                ["cursor-agent", prompt, "--print", "--output-format", "stream-json"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1
-            ) as proc:
-                assert proc.stdout is not None
-                printed_user = False
-                for line in proc.stdout:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    # Пытаемся распарсить JSON-событие
-                    obj: Any = None
-                    try:
-                        obj = json.loads(line)
-                    except Exception:
-                        # Некорректная строка — просто печатаем
-                        print(line)
-                        continue
-                    # Пользовательское сообщение (один раз)
-                    if not printed_user and self._is_user_event(obj):
-                        content = self._extract_text(obj)
-                        if content:
-                            print(self._box(content))
-                            printed_user = True
-                        continue
-                    # Поток ассистента — печатаем без перевода строки
-                    if self._is_assistant_event(obj):
-                        chunk = self._extract_text(obj)
-                        if chunk:
-                            print(chunk, end="", flush=True)
-                        continue
-                    # Финальный результат — перенос строки
-                    if obj.get("type") == "result":
-                        print("")
-                        continue
-                    # Остальное: игнорируем или печатаем компактно, если есть текст
-                    text = self._extract_text(obj)
-                    if text:
-                        print(text)
-                return proc.wait() == 0
+            client = get_global_cursor_client()
+            printed_user = False
+            def _on_user(text: str) -> None:
+                nonlocal printed_user
+                if not printed_user:
+                    print(self._box(text))
+                    printed_user = True
+            def _on_chunk(text: str) -> None:
+                print(text, end="", flush=True)
+            def _on_result(_text: str) -> None:
+                print("")
+            return client.send_stream(prompt, on_user=_on_user, on_chunk=_on_chunk, on_result=_on_result)
         except Exception as e:
             self.print_warning(f"stream-json ошибка: {e}")
             return False
@@ -114,40 +96,8 @@ class AgentInjector(BaseWizard):
         - on_result(full_or_final_line): финал запроса
         """
         try:
-            with subprocess.Popen(
-                ["cursor-agent", prompt, "--print", "--output-format", "stream-json"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1
-            ) as proc:
-                assert proc.stdout is not None
-                printed_user = False
-                for line in proc.stdout:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    obj: Any = None
-                    try:
-                        obj = json.loads(line)
-                    except Exception:
-                        continue
-                    if not printed_user and self._is_user_event(obj):
-                        content = self._extract_text(obj)
-                        if content and on_user:
-                            on_user(content)
-                        printed_user = True
-                        continue
-                    if self._is_assistant_event(obj):
-                        chunk = self._extract_text(obj)
-                        if chunk and on_chunk:
-                            on_chunk(chunk)
-                        continue
-                    if isinstance(obj, dict) and obj.get("type") == "result":
-                        if on_result:
-                            on_result(obj.get("result") or "")
-                        continue
-                return proc.wait() == 0
+            client = get_global_cursor_client()
+            return client.send_stream(prompt, on_user=on_user, on_chunk=on_chunk, on_result=on_result)
         except Exception as e:
             self.print_warning(f"stream-json ошибка: {e}")
             return False
@@ -319,8 +269,7 @@ class AgentInjector(BaseWizard):
             ])
         
         prompt_parts.extend([
-            "**Задача:** Проанализируй причины проблем и предложи решения.",
-            "Фокусируйся на C++ ring buffer, производительности и lockfree vs mutex."
+            "**Задача:** Проанализируй причины проблем и предложи решения."
         ])
         
         prompt = "\n".join(prompt_parts)

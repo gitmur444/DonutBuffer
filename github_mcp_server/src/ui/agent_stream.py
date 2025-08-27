@@ -1,5 +1,6 @@
 """
-Utilities for streaming agent responses from the `cursor-agent` CLI.
+UI-facing convenience function that delegates streaming to the central
+CursorAgentClient, avoiding per-call process spawning and preserving context.
 """
 
 from __future__ import annotations
@@ -8,46 +9,17 @@ import json
 import subprocess
 import sys
 from typing import Iterable, Optional
+from ..core.cursor_client import get_global_cursor_client
 
 
 def stream_agent_response(prompt_text: str) -> None:
-    """Stream assistant output produced by `cursor-agent` for the given prompt.
-
-    This function is resilient to the CLI being unavailable (no exception raised).
-    """
-    cmd = [
-        "cursor-agent",
-        prompt_text,
-        "--print",
-        "--output-format",
-        "stream-json",
-    ]
-    try:
-        with subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-        ) as process:
-            assert process.stdout is not None
-            for line in iter(process.stdout.readline, ""):
-                try:
-                    event = json.loads(line.strip())
-                except json.JSONDecodeError:
-                    continue
-
-                if event.get("type") == "assistant" and "message" in event:
-                    for part in event["message"].get("content", []):
-                        if part.get("type") == "text":
-                            sys.stdout.write(part["text"])
-                            sys.stdout.flush()
-                elif event.get("type") == "result":
-                    print()
-                    break
-    except FileNotFoundError:
-        # cursor-agent not installed; silently ignore
-        return
+    client = get_global_cursor_client()
+    def on_chunk(t: str) -> None:
+        sys.stdout.write(t)
+        sys.stdout.flush()
+    def on_result(_t: str) -> None:
+        print()
+    client.send_stream(prompt_text, on_chunk=on_chunk, on_result=on_result)
 
 
 __all__ = ["stream_agent_response"]
