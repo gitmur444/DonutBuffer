@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import textwrap
-from typing import List
+from typing import List, Optional
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
@@ -24,11 +24,29 @@ from .constants import PLACEHOLDER, DEFAULT_STYLE_DICT
 
 
 class DynamicPromptUI:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        full_screen: bool = False,
+        history_text: str = "",
+        initial_text: str = "",
+        initial_cursor: Optional[int] = None,
+    ) -> None:
         self.placeholder_active = True
+        self._full_screen = full_screen
+        self._history_text = history_text
+        self._start_cols: Optional[int] = None
+        self._start_rows: Optional[int] = None
 
         self.buffer = Buffer(multiline=True)
         self.buffer.on_text_changed += self._on_text_changed
+        # Restore initial text and cursor if provided
+        if initial_text:
+            self.buffer.text = initial_text
+            if isinstance(initial_cursor, int):
+                try:
+                    self.buffer.cursor_position = max(0, min(len(self.buffer.text), initial_cursor))
+                except Exception:
+                    pass
 
         self.input_window = Window(
             content=BufferControl(
@@ -50,6 +68,15 @@ class DynamicPromptUI:
         self.left_border = Window(width=1, char="│", dont_extend_height=True)
         self.right_border = Window(width=1, char="│", dont_extend_height=True)
 
+        # Optional history area (used in fullscreen mode)
+        self._history_ctrl = FormattedTextControl(text=self._history_text)
+        self.history_window = Window(
+            content=self._history_ctrl,
+            wrap_lines=True,
+            dont_extend_height=True,
+            height=D.exact(0),
+        )
+
         self.kb = KeyBindings()
 
         @self.kb.add("c-c")
@@ -70,15 +97,27 @@ class DynamicPromptUI:
 
         self.style = Style.from_dict(DEFAULT_STYLE_DICT)
 
-        self.app = Application(
-            layout=Layout(HSplit([
+        # Root layout depends on fullscreen flag
+        if self._full_screen:
+            root = HSplit([
+                self.history_window,
                 self.frame_top,
                 VSplit([self.left_border, self.input_window, self.right_border]),
                 self.frame_bottom,
-            ])),
+                Window(height=D(weight=1)),
+            ])
+        else:
+            root = HSplit([
+                self.frame_top,
+                VSplit([self.left_border, self.input_window, self.right_border]),
+                self.frame_bottom,
+            ])
+
+        self.app = Application(
+            layout=Layout(root),
             key_bindings=self.kb,
             mouse_support=False,
-            full_screen=False,
+            full_screen=self._full_screen,
             style=self.style,
             refresh_interval=0.2,
         )
@@ -101,9 +140,11 @@ class DynamicPromptUI:
 
     def _recompute_height(self) -> None:
         app = get_app()
-        columns = max(10, app.output.get_size().columns)
+        size = app.output.get_size()
+        columns = max(10, size.columns)
         # Inner width excludes vertical borders; BufferControl accounts for prompt prefix
-        inner_width = max(1, columns - 2)
+        # Subtract 2 for vertical borders and 2 for the "→ " prompt prefix
+        inner_width = max(1, columns - 2 - 2)
         text = self.buffer.text
         lines = text.split("\n") if text != "" else [""]
         needed = 0
@@ -114,6 +155,17 @@ class DynamicPromptUI:
         self.input_window.height = D.exact(box_height)
         self.left_border.height = D.exact(box_height)
         self.right_border.height = D.exact(box_height)
+        # History height (only if present)
+        if self._full_screen and self._history_text:
+            h_lines = 0
+            for hl in self._history_text.splitlines() or [""]:
+                h_lines += max(1, len(textwrap.wrap(hl, width=columns)) or 1)
+            # leave space for frame (3 rows) and input box
+            rows = max(3, size.rows)
+            max_hist = max(0, rows - (3 + box_height))
+            self.history_window.height = D.exact(min(h_lines, max_hist))
+        else:
+            self.history_window.height = D.exact(0)
         # Redraw top/bottom borders to current width
         self._draw_borders(columns)
         self._invalidate()
@@ -127,18 +179,34 @@ class DynamicPromptUI:
 
     async def _resize_watcher(self) -> None:
         app = self.app
+        # capture initial size
+        if self._start_cols is None or self._start_rows is None:
+            s = app.output.get_size()
+            self._start_cols, self._start_rows = s.columns, s.rows
         last_size = app.output.get_size()
         while True:
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.2)
             size = app.output.get_size()
             if size.columns != last_size.columns or size.rows != last_size.rows:
                 last_size = size
+                # If we are not fullscreen yet, request switch to fullscreen
+                if not self._full_screen:
+                    # return current text and cursor position to restore
+                    try:
+                        cur_pos = self.buffer.cursor_position
+                    except Exception:
+                        cur_pos = None
+                    app.exit(result=("__RESIZE_FULL__", self.buffer.text, cur_pos))
+                    return
                 self._recompute_height()
 
     def run(self) -> str | None:
         self._recompute_height()
         # Create the background task after the event loop is running
         def _pre_run() -> None:
+            # initialize size and schedule watcher
+            s = self.app.output.get_size()
+            self._start_cols, self._start_rows = s.columns, s.rows
             self.app.create_background_task(self._resize_watcher())
         return self.app.run(pre_run=_pre_run)
 
