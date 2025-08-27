@@ -24,7 +24,7 @@ OnText = Callable[[str], None]
 
 class CursorAgentClient:
     def __init__(self) -> None:
-        self._has_session: bool = False
+        self._session_id: Optional[str] = None
 
     def available(self) -> bool:
         try:
@@ -49,10 +49,11 @@ class CursorAgentClient:
         """
         cmd = (
             ["cursor-agent", prompt, "--print", "--output-format", "stream-json"]
-            if not self._has_session
+            if not self._session_id
             else [
                 "cursor-agent",
-                "resume",
+                "--resume",
+                self._session_id,
                 prompt,
                 "--print",
                 "--output-format",
@@ -79,6 +80,14 @@ class CursorAgentClient:
                     except Exception:
                         continue
 
+                    # Capture/verify session id
+                    event_sid = obj.get("session_id") if isinstance(obj, dict) else None
+                    if self._session_id is None and event_sid:
+                        self._session_id = event_sid
+                    if self._session_id is not None and event_sid and event_sid != self._session_id:
+                        # Ignore events from other sessions
+                        continue
+
                     if not printed_user and _is_user_event(obj):
                         content = _extract_text(obj)
                         if content and on_user:
@@ -98,8 +107,6 @@ class CursorAgentClient:
                         continue
 
                 ok = proc.wait() == 0
-                if ok:
-                    self._has_session = True
                 return ok
         except Exception:
             return False
