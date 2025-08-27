@@ -8,7 +8,7 @@ from .prompt_ui import DynamicPromptUI
 from .agent_stream import stream_agent_response
 
 
-def run_interactive() -> None:
+def run_interactive(preface_text: str | None = None) -> None:
     while True:
         ui = DynamicPromptUI()
         try:
@@ -27,6 +27,10 @@ def run_interactive() -> None:
             continue
 
         print()
+        # If provided, print preface text once before streaming the agent response
+        if preface_text:
+            print(preface_text)
+            preface_text = None
         stream_agent_response(user_text)
         # Loop repeats and reopens the input frame
 
