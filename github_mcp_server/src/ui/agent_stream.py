@@ -10,7 +10,7 @@ import subprocess
 import sys
 from typing import Iterable, Optional
 from ..core.cursor_client import get_global_cursor_client
-from .message_bus import UIEventBus
+from ..core.message_bus import UIEventBus
 
 
 def stream_agent_response(prompt_text: str) -> None:

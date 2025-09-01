@@ -51,7 +51,7 @@ class EventHandlers(BaseWizard):
         answer = self.agent_injector.send_prompt(prompt)
         if answer:
             try:
-                from ..ui.message_bus import UIEventBus
+                from ..core.message_bus import UIEventBus
                 UIEventBus.instance().publish_assistant_message(answer)
             except Exception:
                 pass

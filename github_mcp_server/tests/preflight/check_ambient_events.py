@@ -51,6 +51,8 @@ def run_ambient_events_check(donut_dir: Path) -> tuple[bool, str]:
         finally:
             pass
 
+        if ok:
+            printer.print_success("Ambient события обработаны: тестовый issue прошёл E2E")
         return ok, "ambient_events: ok" if ok else "ambient_events: fail"
 
     except Exception as e:

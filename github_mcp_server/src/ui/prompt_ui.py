@@ -5,25 +5,25 @@ and automatic height adjustment on text changes and terminal resize.
 
 from __future__ import annotations
 
-import asyncio
-import textwrap
 from typing import List, Optional
-import threading
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
-from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+from prompt_toolkit.layout.controls import BufferControl
 from prompt_toolkit.layout.containers import VSplit
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.processors import BeforeInput
 from prompt_toolkit.styles import Style
 
 from .constants import PLACEHOLDER, DEFAULT_STYLE_DICT
-from .message_bus import UIEventBus
-from ..core.cursor_client import get_global_cursor_client
+from .history import MessageHistory
+from .frame import TextFrame
+from .keybindings import create_keybindings
+from .sizing import LayoutSizer
+from .resize import run_resize_watcher
+from ..core.message_bus import UIEventBus
 
 
 class DynamicPromptUI:
@@ -39,9 +39,7 @@ class DynamicPromptUI:
         self._history_text = history_text
         self._start_cols: Optional[int] = None
         self._start_rows: Optional[int] = None
-        self._messages: List[tuple[str, str]] = []
-        if self._history_text:
-            self._messages.append(("system", self._history_text))
+        self._history = MessageHistory(self._history_text)
 
         self.buffer = Buffer(multiline=True)
         self.buffer.on_text_changed += self._on_text_changed
@@ -64,54 +62,27 @@ class DynamicPromptUI:
             height=D(preferred=1),
         )
 
-        # Border controls (text-based) to ensure exact reflow on resize
-        self._top_ctrl = FormattedTextControl(text="")
-        self._bottom_ctrl = FormattedTextControl(text="")
-        self.frame_top = Window(content=self._top_ctrl, height=D.exact(1), dont_extend_height=True)
-        self.frame_bottom = Window(content=self._bottom_ctrl, height=D.exact(1), dont_extend_height=True)
-
-        # Vertical borders with explicit height matching the input box
-        self.left_border = Window(width=1, char="│", dont_extend_height=True)
-        self.right_border = Window(width=1, char="│", dont_extend_height=True)
+        # Frame with borders
+        self._frame = TextFrame()
 
         # History area: shows assistant/user/system messages
-        self._history_ctrl = FormattedTextControl(text="")
         self.history_window = Window(
-            content=self._history_ctrl,
+            content=self._history.control,
             wrap_lines=True,
             dont_extend_height=True,
             height=D.exact(0),
         )
 
-        self.kb = KeyBindings()
-
-        @self.kb.add("c-c")
-        def _(event) -> None:
-            event.app.exit(result=None)
-
-        @self.kb.add("c-d")
-        def _(event) -> None:
-            event.app.exit(result=None)
-
-        @self.kb.add("c-j")
-        def _(event) -> None:
-            event.current_buffer.insert_text("\n")
-
-        @self.kb.add("enter")
-        def _(event) -> None:
+        def _on_submit() -> str:
             user_text = self.buffer.text.rstrip("\n")
             if not user_text:
-                return
+                return ""
             self._append_user_message(user_text)
             self.buffer.text = ""
             self._recompute_height()
-            client = get_global_cursor_client()
-            def _on_chunk(t: str) -> None:
-                self._apply_assistant_text(t)
-            def _on_result(_t: str) -> None:
-                pass
-            th = threading.Thread(target=lambda: client.send_stream(user_text, on_chunk=_on_chunk, on_result=_on_result), daemon=True)
-            th.start()
+            return user_text
+
+        self.kb = create_keybindings(_on_submit, self._apply_assistant_text)
 
         self.style = Style.from_dict(DEFAULT_STYLE_DICT)
 
@@ -119,17 +90,17 @@ class DynamicPromptUI:
         if self._full_screen:
             root = HSplit([
                 self.history_window,
-                self.frame_top,
-                VSplit([self.left_border, self.input_window, self.right_border]),
-                self.frame_bottom,
+                self._frame.top,
+                VSplit([self._frame.left, self.input_window, self._frame.right]),
+                self._frame.bottom,
                 Window(height=D(weight=1)),
             ])
         else:
             root = HSplit([
                 self.history_window,
-                self.frame_top,
-                VSplit([self.left_border, self.input_window, self.right_border]),
-                self.frame_bottom,
+                self._frame.top,
+                VSplit([self._frame.left, self.input_window, self._frame.right]),
+                self._frame.bottom,
             ])
 
         self.app = Application(
@@ -142,9 +113,9 @@ class DynamicPromptUI:
         )
 
         # Background tasks must be created when an event loop is running.
-        # We schedule the watcher in run(pre_run=...) instead of here.
         self._invalidate()
         UIEventBus.instance().set_consumer(self._apply_assistant_text)
+        self._sizer = LayoutSizer()
 
     def _before_input(self):
         if self.placeholder_active:
@@ -160,59 +131,29 @@ class DynamicPromptUI:
 
     def _recompute_height(self) -> None:
         app = get_app()
-        size = app.output.get_size()
-        columns = max(10, size.columns)
-        # Inner width excludes vertical borders; BufferControl accounts for prompt prefix
-        # Subtract 2 for vertical borders and 2 for the "→ " prompt prefix
-        inner_width = max(1, columns - 2 - 2)
-        text = self.buffer.text
-        lines = text.split("\n") if text != "" else [""]
-        needed = 0
-        for line in lines:
-            wraps = textwrap.wrap(line, width=inner_width) or [""]
-            needed += max(1, len(wraps))
-        box_height = max(1, needed)
-        self.input_window.height = D.exact(box_height)
-        self.left_border.height = D.exact(box_height)
-        self.right_border.height = D.exact(box_height)
-        # History height based on rendered text and available space (both modes)
-        # Update history view text from messages
-        self._update_history_view(columns)
-        h_lines = 0
-        for hl in (self._history_ctrl.text or "").splitlines() or [""]:
-            h_lines += max(1, len(textwrap.wrap(hl, width=columns)) or 1)
-        rows = max(3, size.rows)
-        max_hist = max(0, rows - (3 + box_height))
-        self.history_window.height = D.exact(min(h_lines, max_hist))
-        # Redraw top/bottom borders to current width
-        self._draw_borders(columns)
+        self._sizer.recompute(
+            app=app,
+            buffer=self.buffer,
+            frame=self._frame,
+            history=self._history,
+            history_window=self.history_window,
+            input_window=self.input_window,
+            full_screen=self._full_screen,
+        )
         self._invalidate()
 
     def _draw_borders(self, columns: int) -> None:
-        cols = max(4, columns)
-        top = "┌" + "─" * max(2, cols - 2) + "┐"
-        bottom = "└" + "─" * max(2, cols - 2) + "┘"
-        self._top_ctrl.text = top
-        self._bottom_ctrl.text = bottom
+        self._frame.redraw_borders(columns)
 
     def _update_history_view(self, columns: int) -> None:
-        parts: List[str] = []
-        for _role, text in self._messages:
-            parts.append(text)
-            if not text.endswith("\n"):
-                parts.append("\n")
-        self._history_ctrl.text = "".join(parts)
+        self._history.update_view(columns)
 
     def _append_user_message(self, text: str) -> None:
-        self._messages.append(("user", text))
+        self._history.append_user(text)
         self._update_history_view(get_app().output.get_size().columns)
 
     def _append_assistant_chunk(self, text: str) -> None:
-        if not self._messages or self._messages[-1][0] != "assistant":
-            self._messages.append(("assistant", text))
-        else:
-            role, cur = self._messages[-1]
-            self._messages[-1] = (role, cur + text)
+        self._history.append_assistant_chunk(text)
         self._update_history_view(get_app().output.get_size().columns)
 
     def _apply_assistant_text(self, text: str) -> None:
@@ -223,26 +164,23 @@ class DynamicPromptUI:
 
     async def _resize_watcher(self) -> None:
         app = self.app
-        # capture initial size
-        if self._start_cols is None or self._start_rows is None:
-            s = app.output.get_size()
-            self._start_cols, self._start_rows = s.columns, s.rows
-        last_size = app.output.get_size()
-        while True:
-            await asyncio.sleep(0.2)
-            size = app.output.get_size()
-            if size.columns != last_size.columns or size.rows != last_size.rows:
-                last_size = size
-                # If we are not fullscreen yet, request switch to fullscreen
-                if not self._full_screen:
-                    # return current text and cursor position to restore
-                    try:
-                        cur_pos = self.buffer.cursor_position
-                    except Exception:
-                        cur_pos = None
-                    app.exit(result=("__RESIZE_FULL__", self.buffer.text, cur_pos))
-                    return
-                self._recompute_height()
+
+        def _on_first(_c: int, _r: int) -> None:
+            if self._start_cols is None or self._start_rows is None:
+                s = app.output.get_size()
+                self._start_cols, self._start_rows = s.columns, s.rows
+
+        def _on_resize(_c: int, _r: int) -> None:
+            if not self._full_screen:
+                try:
+                    cur_pos = self.buffer.cursor_position
+                except Exception:
+                    cur_pos = None
+                app.exit(result=("__RESIZE_FULL__", self.buffer.text, cur_pos))
+                return
+            self._recompute_height()
+
+        await run_resize_watcher(app, _on_first, _on_resize)
 
     def run(self) -> str | None:
         self._recompute_height()

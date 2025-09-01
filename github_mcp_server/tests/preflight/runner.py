@@ -24,6 +24,8 @@ def run_preflight(donut_dir: Path, on_progress: Optional[Callable[[str], None]] 
             on_progress(msg)
         except Exception:
             pass
+    if not ok:
+        return False, statuses
     ok_all = ok_all and ok
 
     ok, msg = run_github_access_check(env)
@@ -33,6 +35,8 @@ def run_preflight(donut_dir: Path, on_progress: Optional[Callable[[str], None]] 
             on_progress(msg)
         except Exception:
             pass
+    if not ok:
+        return False, statuses
     ok_all = ok_all and ok
 
     ok, msg = run_mcp_config_check(donut_dir)
@@ -42,6 +46,8 @@ def run_preflight(donut_dir: Path, on_progress: Optional[Callable[[str], None]] 
             on_progress(msg)
         except Exception:
             pass
+    if not ok:
+        return False, statuses
     ok_all = ok_all and ok
 
     # Шаг 4: Интеграционные проверки (GitHub API + cursor-agent)
@@ -54,6 +60,8 @@ def run_preflight(donut_dir: Path, on_progress: Optional[Callable[[str], None]] 
             on_progress(msg)
         except Exception:
             pass
+    if not ok:
+        return False, statuses
     ok_all = ok_all and ok
 
     # Шаг 5: Ambient Agent (session + ping)
@@ -64,7 +72,8 @@ def run_preflight(donut_dir: Path, on_progress: Optional[Callable[[str], None]] 
             on_progress(msg)
         except Exception:
             pass
-    ok_all = ok_all and ok
+    if not ok:
+        return False, statuses
 
     # Шаг 6: Ambient Events (GITHUB_ISSUE_TEST E2E)
     ok, msg = run_ambient_events_check(donut_dir)
@@ -74,7 +83,8 @@ def run_preflight(donut_dir: Path, on_progress: Optional[Callable[[str], None]] 
             on_progress(msg)
         except Exception:
             pass
-    ok_all = ok_all and ok
+    if not ok:
+        return False, statuses
 
     return ok_all, statuses
 

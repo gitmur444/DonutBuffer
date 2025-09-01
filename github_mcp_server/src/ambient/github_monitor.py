@@ -86,11 +86,7 @@ class GitHubMonitor(BaseWizard):
             self._baseline_runs()
         except Exception:
             pass
-        self.print_info("GitHub мониторинг: старт")
         self.monitor_thread.start()
-        
-        # Лаконичное сообщение
-        self.print_info("GitHub мониторинг: активен")
         return True
     
     def stop_monitoring(self) -> None:
@@ -98,7 +94,6 @@ class GitHubMonitor(BaseWizard):
         self.monitoring = False
         if self.monitor_thread:
             self.monitor_thread.join(timeout=10)
-        self.print_info("GitHub мониторинг: остановлен")
     
     def monitoring_loop(self) -> None:
         """Основной цикл мониторинга"""
@@ -267,8 +262,6 @@ class GitHubMonitor(BaseWizard):
             "last_check": self.last_check_time,
             "seen_runs": len(self.seen_runs)
         }
-        # Лаконичный вывод
-        self.print_info("GitHub мониторинг: ok")
         return result
     
     def get_headers(self) -> Dict[str, str]:

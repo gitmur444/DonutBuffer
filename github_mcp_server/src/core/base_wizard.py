@@ -23,7 +23,7 @@ class BaseWizard:
     
     def print_step(self, step: int, message: str) -> None:
         """Print step with beautiful formatting."""
-        console.print(f"\n[cyan]🔮 Шаг {step}/5: [bold]{message}[/bold][/cyan]")
+        console.print(f"\n[cyan]🔮 Шаг {step}/6: [bold]{message}[/bold][/cyan]")
         
     def print_success(self, message: str) -> None:
         """Print success message."""
@@ -39,4 +39,4 @@ class BaseWizard:
 
     def print_info(self, message: str) -> None:
         """Print info message."""
-        console.print(f"[blue]ℹ️  {message}[/blue]") 
+        console.print(f"[blue]ℹ️  {message}[/blue]")

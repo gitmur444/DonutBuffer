@@ -62,33 +62,31 @@ class AmbientAgent(BaseWizard):
     
     def start(self) -> None:
         """Запускает ambient agent"""
-        self.print_info("🤖 Запускаю DonutBuffer Ambient Agent...")
-        
         # Префлайт-проверки выполняются в ./wizard через tests/preflight/runner
         
         self.running = True
         
         # Запускаем систему событий
-        self.print_info("[ambient] starting event system")
         self.event_system.start_processing()
         
         # Запускаем мониторинг GitHub
-        self.print_info("[ambient] starting GitHub monitor")
-        if self.github_monitor.start_monitoring():
-            self.print_success("🔍 GitHub мониторинг активен")
-        else:
+        if not self.github_monitor.start_monitoring():
             self.print_warning("⚠️ GitHub мониторинг не запущен (проверьте токен)")
-        
-        self.print_success("🤖 Ambient Agent запущен и работает в фоне")
-        self.print_info("💡 Нажмите Ctrl+C для остановки")
         
         # Основной цикл
         try:
             self.main_loop()
         except KeyboardInterrupt:
-            self.print_info("\n⚠️ Получен сигнал остановки...")
+            pass
         finally:
             self.stop()
+
+    def start_background(self) -> None:
+        """Инициализирует компоненты без входа в основной цикл (для префлайта)."""
+        self.running = True
+        self.event_system.start_processing()
+        if not self.github_monitor.start_monitoring():
+            self.print_warning("⚠️ GitHub мониторинг не запущен (проверьте токен)")
     
     # Префлайт-проверка перенесена в tests/preflight/runner.py
     
@@ -114,24 +112,18 @@ class AmbientAgent(BaseWizard):
     
     def stop(self) -> None:
         """Останавливает ambient agent"""
-        self.print_info("🛑 Останавливаю Ambient Agent...")
-        
         self.running = False
         
         # Останавливаем компоненты
         self.github_monitor.stop_monitoring()
         self.event_system.stop_processing()
-        
-        self.print_success("🤖 Ambient Agent остановлен")
     
     def signal_handler(self, signum, frame):
         """Обработчик сигналов для graceful shutdown"""
-        self.print_info(f"\n📡 Получен сигнал {signum}")
         self.running = False
     
     def trigger_manual_analysis(self, analysis_type: str, content: str) -> None:
         """Запускает ручной анализ"""
-        
         self.event_system.emit_simple(
             event_type=EventType.MANUAL_TRIGGER,
             data={
@@ -141,8 +133,6 @@ class AmbientAgent(BaseWizard):
             source="manual",
             priority=3
         )
-        
-        self.print_success(f"🎯 Запущен ручной анализ: {analysis_type}")
     
     # E2E проверка вынесена в tests/preflight/check_ambient.py
 

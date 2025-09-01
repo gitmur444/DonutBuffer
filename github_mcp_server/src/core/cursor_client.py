@@ -41,25 +41,32 @@ class CursorAgentClient:
         on_user: Optional[OnText] = None,
         on_chunk: Optional[OnText] = None,
         on_result: Optional[OnText] = None,
+        stop_on_session: bool = False,
+        stop_on_first_chunk: bool = False,
     ) -> bool:
         """Send a prompt and stream the assistant response.
 
         - The first call uses a fresh conversation.
         - Subsequent calls use `resume` to keep context.
         """
-        cmd = (
-            ["cursor-agent", prompt, "--print", "--output-format", "stream-json"]
-            if not self._session_id
-            else [
+        if not self._session_id:
+            cmd = [
                 "cursor-agent",
-                "--resume",
-                self._session_id,
                 prompt,
                 "--print",
                 "--output-format",
                 "stream-json",
             ]
-        )
+        else:
+            cmd = [
+                "cursor-agent",
+                "--resume",
+                self._session_id,
+                "--print",
+                "--output-format",
+                "stream-json",
+                prompt,
+            ]
         try:
             with subprocess.Popen(
                 cmd,
@@ -84,6 +91,12 @@ class CursorAgentClient:
                     event_sid = obj.get("session_id") if isinstance(obj, dict) else None
                     if self._session_id is None and event_sid:
                         self._session_id = event_sid
+                        if stop_on_session:
+                            try:
+                                proc.terminate()
+                            except Exception:
+                                pass
+                            return True
                     if self._session_id is not None and event_sid and event_sid != self._session_id:
                         # Ignore events from other sessions
                         continue
@@ -101,6 +114,12 @@ class CursorAgentClient:
                             # debug chunk size
                             # sys.stderr.write(f"[cursor] chunk {len(chunk)}\n"); sys.stderr.flush()
                             on_chunk(chunk)
+                        if stop_on_first_chunk and chunk:
+                            try:
+                                proc.terminate()
+                            except Exception:
+                                pass
+                            return True
                         continue
 
                     if isinstance(obj, dict) and obj.get("type") == "result":
@@ -127,11 +146,11 @@ class CursorAgentClient:
         Sends a minimal prompt without any callbacks to avoid output. Returns
         the session_id if available (existing or newly established).
         """
-        if self._session_id:
-            return self._session_id
-        # Minimal, non-intrusive prompt to establish a session and get session_id
+        # Always start a fresh session at start
+        self._session_id = None
+        # Minimal prompt to create a new session and capture session_id from first events
         try:
-            self.send_stream("init session", on_user=None, on_chunk=None, on_result=None)
+            self.send_stream("DonutBuffer ambient init", on_user=None, on_chunk=None, on_result=None)
         except Exception:
             pass
         return self._session_id

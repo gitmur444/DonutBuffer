@@ -68,8 +68,7 @@ class DonutAIWizard(BaseWizard):
             
             # Запускаем Ambient Agent в фоне (тихо)
             import os
-            # Для отладки цепочки событий включаем подробный вывод
-            os.environ["AMBIENT_SILENT"] = "0"
+            # Не навязываем режимы вывода из мастера
             self.start_ambient_agent_background_no_sig()
             # Запуск простого интерактивного режима
             from src.ui import run_interactive
